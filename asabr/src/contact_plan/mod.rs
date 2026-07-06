@@ -22,11 +22,11 @@ pub mod from_tvgutil_file;
 #[derive(Clone)]
 pub struct ContactPlan<NM: NodeManager, CM: ContactManager> {
     /// Real nodes sorted by ID. `INode`s and `ENode`s.
-    pub(crate) realnodes: Vec<RealNode<NM>>,
+    pub realnodes: Vec<RealNode<NM>>,
     /// Virtual nodes
-    pub(crate) vnodes: Vec<VirtualNodeInfo>,
+    pub vnodes: Vec<VirtualNodeInfo>,
     /// Contacts, sender node, receiver node as index in realnodes
-    pub(crate) contacts: Vec<(Contact<CM>, usize, usize)>,
+    pub contacts: Vec<(Contact<CM>, usize, usize)>,
 }
 
 #[derive(Clone)]

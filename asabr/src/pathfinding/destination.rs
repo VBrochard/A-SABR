@@ -130,15 +130,15 @@ impl<'id> Dest<'id> {
 }
 
 impl<'id> Destination<'id> for RNodeRef<'id> {
-    // #[inline(always)]
+    #[inline(always)]
     fn reinit(&mut self) {}
 
-    // #[inline(always)]
+    #[inline(always)]
     fn now_reached(&mut self, node: NodeRef<'id>) -> bool {
         node == NodeRef::R(*self)
     }
 
-    // #[inline(always)]
+    #[inline(always)]
     fn is_useful(&self, _node: VNodeRef<'id>) -> bool {
         false
     }
@@ -155,15 +155,15 @@ impl<'id> Destination<'id> for RNodeRef<'id> {
 }
 
 impl<'id> Destination<'id> for VNodeRef<'id> {
-    // #[inline(always)]
+    #[inline(always)]
     fn reinit(&mut self) {}
 
-    // #[inline(always)]
+    #[inline(always)]
     fn now_reached(&mut self, node: NodeRef<'id>) -> bool {
         node == NodeRef::V(*self)
     }
 
-    // #[inline(always)]
+    #[inline(always)]
     fn is_useful(&self, node: VNodeRef<'id>) -> bool {
         node == *self
     }
@@ -180,15 +180,15 @@ impl<'id> Destination<'id> for VNodeRef<'id> {
 }
 
 impl<'id> Destination<'id> for NodeRef<'id> {
-    // #[inline(always)]
+    #[inline(always)]
     fn reinit(&mut self) {}
 
-    // #[inline(always)]
+    #[inline(always)]
     fn now_reached(&mut self, node: NodeRef<'id>) -> bool {
         node == *self
     }
 
-    // #[inline(always)]
+    #[inline(always)]
     fn is_useful(&self, node: VNodeRef<'id>) -> bool {
         match self {
             NodeRef::R(rnode_ref) => rnode_ref.is_useful(node),

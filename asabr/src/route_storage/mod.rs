@@ -108,9 +108,12 @@ impl<
     ) -> Result<Option<PathFindingOutput<'id, 'a>>, ASABRError> {
         // Concurent usage validated by polonius
         let copy = &raw mut self.cache;
-        match unsafe{copy.as_mut_unchecked()}
-            .select(bundle, routing_time, prune_time, multigraph)
-        {
+        match unsafe { copy.as_mut_unchecked() }.select(
+            bundle,
+            routing_time,
+            prune_time,
+            multigraph,
+        ) {
             res @ (Ok(Some(_)) | Err(_)) => res,
             Ok(None) => {
                 match self.pathfinder.find_path(
@@ -122,7 +125,9 @@ impl<
                     prune_time,
                 ) {
                     res @ (Ok(None) | Err(_)) => res,
-                    Ok(Some(path)) => Ok(Some(unsafe{copy.as_mut_unchecked()}.store(bundle, path))),
+                    Ok(Some(path)) => {
+                        Ok(Some(unsafe { copy.as_mut_unchecked() }.store(bundle, path)))
+                    }
                 }
             }
         }
@@ -187,9 +192,11 @@ impl<'id, const PRIO_COUNT: usize, G: Guardable<'id>> Guard<'id, G, PRIO_COUNT> 
         dest: &G,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
-        let place = &self.limits[&dest.as_id(graph)];
-        place[(PRIO_COUNT - 1).min(bundle.priority as usize)]
-            .is_some_and(|limit| limit <= bundle.size)
+        match &self.limits.get(&dest.as_id(graph)) {
+            None => false,
+            Some(place) => place[(PRIO_COUNT - 1).min(bundle.priority as usize)]
+                .is_some_and(|limit| limit <= bundle.size),
+        }
     }
 }
 
