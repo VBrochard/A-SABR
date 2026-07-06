@@ -6,7 +6,7 @@ use crate::types::{NodeID, TimeInterval};
 use super::NodeManager;
 
 /// Use this manager if no node management is needed.
-#[derive(Debug, Default)]
+#[derive(Debug, Default,Clone,Copy)]
 pub struct NoManagement {}
 empty_parse!(NoManagement);
 

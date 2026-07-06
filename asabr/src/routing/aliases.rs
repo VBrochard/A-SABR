@@ -1,25 +1,28 @@
 extern crate alloc;
 
-use super::spsn::Spsn;
 #[allow(unused_imports)]
 use super::cgr::Cgr;
+use super::spsn::Spsn;
+#[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+use crate::pathfinding::limiting_contact::had_less_volume_than;
 #[cfg(feature = "contact_suppression")]
-use crate::pathfinding::limiting_contact::Suppressor;
+use crate::pathfinding::limiting_contact::{Suppressor, ends_earlier_than};
 use crate::{
     contact_manager::ContactManager,
     contact_plan::ContactPlan,
     distance::{hop::Hop, sabr::SABR},
     errors::ASABRError,
+    multigraph::{Multigraph, NodeRef},
     node_manager::NodeManager,
     pathfinding::{
         Pathfinding,
-        destination::Destination,
         dijkstra_impl::{ContactParenting, HybridParenting, NodeParenting},
     },
-    route_storage::{cache::TreeCache, table::RoutingTable},
+    route_storage::{Cached, cache::TreeCache, table::RoutingTable},
     routing::volcgr::VolCgr,
 };
 use alloc::boxed::Box;
+use generativity::Guard;
 
 pub type SpsnHybridParenting<'id, const PRIO_COUNT: usize, NM, CM, D> =
     Spsn<'id, PRIO_COUNT, NM, CM, HybridParenting<'id, SABR, NM, CM>, TreeCache<'id, NM, CM>, D>;
@@ -28,16 +31,16 @@ pub type SpsnNodeParenting<'id, const PRIO_COUNT: usize, NM, CM, D> =
     Spsn<'id, PRIO_COUNT, NM, CM, NodeParenting<'id, SABR>, TreeCache<'id, NM, CM>, D>;
 
 pub type SpsnContactParenting<'id, const PRIO_COUNT: usize, NM, CM, D> =
-    Spsn<'id, PRIO_COUNT, NM, CM, ContactParenting<'id, SABR, NM, CM>, TreeCache<'id, NM, CM>, D>;
+    Spsn<'id, PRIO_COUNT, NM, CM, ContactParenting<'id, NM, CM, SABR>, TreeCache<'id, NM, CM>, D>;
 
 pub type VolCgrHybridParenting<'id, NM, CM, D> =
-    VolCgr<'id, NM, CM, HybridParenting<'id, NM, CM, SABR>, RoutingTable<'id, NM, CM, SABR>, D>;
+    VolCgr<'id, RoutingTable<'id, NM, CM, SABR>, HybridParenting<'id, SABR, NM, CM>, NM, CM, D>;
 
 pub type VolCgrNodeParenting<'id, NM, CM, D> =
-    VolCgr<'id, NM, CM, NodeParenting<'id, SABR>, RoutingTable<'id, NM, CM, SABR>, D>;
+    VolCgr<'id, RoutingTable<'id, NM, CM, SABR>, NodeParenting<'id, SABR>, NM, CM, D>;
 
 pub type VolCgrContactParenting<'id, NM, CM, D> =
-    VolCgr<'id, NM, CM, ContactParenting<'id, NM, CM, SABR>, RoutingTable<'id, NM, CM, SABR>, D>;
+    VolCgr<'id, RoutingTable<'id, NM, CM, SABR>, ContactParenting<'id, NM, CM, SABR>, NM, CM, D>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrSupressorHybridParenting<'id, NM, CM, D> = Cgr<
@@ -76,33 +79,33 @@ pub type SpsnNodeParentingHop<'id, const PRIO_COUNT: usize, NM, CM, D> =
     Spsn<'id, PRIO_COUNT, NM, CM, NodeParenting<'id, Hop>, TreeCache<'id, NM, CM>, D>;
 
 pub type SpsnContactParentingHop<'id, const PRIO_COUNT: usize, NM, CM, D> =
-    Spsn<'id, PRIO_COUNT, NM, CM, ContactParenting<'id, Hop, NM, CM>, TreeCache<'id, NM, CM>, D>;
+    Spsn<'id, PRIO_COUNT, NM, CM, ContactParenting<'id, NM, CM, Hop>, TreeCache<'id, NM, CM>, D>;
 
 pub type VolCgrHybridParentingHop<'id, NM, CM, D> =
-    VolCgr<'id, NM, CM, HybridParenting<'id, Hop, NM, CM>, RoutingTable<'id, NM, CM, Hop>, D>;
+    VolCgr<'id, RoutingTable<'id, NM, CM, Hop>, HybridParenting<'id, Hop, NM, CM>, NM, CM, D>;
 
 pub type VolCgrNodeParentingHop<'id, NM, CM, D> =
-    VolCgr<'id, NM, CM, NodeParenting<'id, Hop>, RoutingTable<'id, NM, CM, Hop>, D>;
+    VolCgr<'id, RoutingTable<'id, NM, CM, Hop>, NodeParenting<'id, Hop>, NM, CM, D>;
 
 pub type VolCgrContactParentingHop<'id, NM, CM, D> =
-    VolCgr<'id, NM, CM, ContactParenting<'id, NM, CM, Hop>, RoutingTable<'id, NM, CM, Hop>, D>;
+    VolCgr<'id, RoutingTable<'id, NM, CM, Hop>, ContactParenting<'id, NM, CM, Hop>, NM, CM, D>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrSupressorHybridParentingHop<'id, NM, CM, D> = Cgr<
     'id,
     NM,
     CM,
-    Suppressor<'id, NM, CM, HybridParenting<'id, Hop, NM, CM>>,
+    Suppressor<'id, HybridParenting<'id, Hop, NM, CM>, NM, CM>,
     RoutingTable<'id, NM, CM, Hop>,
     D,
 >;
 
 #[cfg(feature = "contact_suppression")]
-pub type CgrSuppressorNodeParentingHop<'id, NM, CM, D> = Cgr<
+pub type CgrSupressorNodeParentingHop<'id, NM, CM, D> = Cgr<
     'id,
     NM,
     CM,
-    Suppressor<'id, NM, CM, NodeParenting<'id, Hop>>,
+    Suppressor<'id, NodeParenting<'id, Hop>, NM, CM>,
     RoutingTable<'id, NM, CM, Hop>,
     D,
 >;
@@ -112,7 +115,7 @@ pub type CgrSupressorContactParentingHop<'id, NM, CM, D> = Cgr<
     'id,
     NM,
     CM,
-    Suppressor<'id, NM, CM, ContactParenting<'id, NM, CM, Hop>>,
+    Suppressor<'id,ContactParenting<'id, NM, CM, Hop>, NM, CM, >,
     RoutingTable<'id, NM, CM, Hop>,
     D,
 >;
@@ -154,223 +157,144 @@ pub struct SpsnOptions {
     pub max_entries: usize,
 }
 
-pub fn build_generic_router<
+/// Intended for tests / benchmarking where you deal with a bunch of router types, not production code
+/// Initialise the correct router directly where possible
+pub unsafe fn build_generic_router<
     'id,
+    const PRIO_COUNT: usize,
     NM: NodeManager + 'static,
     CM: ContactManager + 'static,
-    D: Destination<'id>,
 >(
-    _router_type: &str,
-    _contact_plan: ContactPlan<NM, CM>,
-    _spsn_options: Option<SpsnOptions>,
-) -> Result<Box<dyn Pathfinding<'id, NM, CM, D>>, ASABRError> {
-    todo!()
+    router_type: &str,
+    contact_plan: ContactPlan<NM, CM>,
+) -> Result<
+    (
+        Multigraph<'id, NM, CM>,
+        Box<dyn Pathfinding<'id, NM, CM, NodeRef<'id>> + 'id>,
+    ),
+    ASABRError,
+> {
+    let multigraph = unsafe { Multigraph::new_unguarded( contact_plan) }?;
+    let router = match router_type {
+        "SpsnNodeParenting" => Box::new(SpsnNodeParenting::<PRIO_COUNT, NM, CM, _>::new(
+            Cached::new(TreeCache::new(&multigraph), NodeParenting::new()),
+        )) as Box<dyn Pathfinding<'id, NM, CM, _> + 'id>,
+        "SpsnNodeParentingHop" => Box::new(SpsnNodeParentingHop::<PRIO_COUNT, NM, CM, _>::new(
+            Cached::new(TreeCache::new(&multigraph), NodeParenting::new()),
+        )),
+        "SpsnHybridParenting" => Box::new(SpsnHybridParenting::<PRIO_COUNT, NM, CM, _>::new(
+            Cached::new(TreeCache::new(&multigraph), HybridParenting::new()),
+        )),
+        "SpsnHybridParentingHop" => Box::new(SpsnHybridParentingHop::<PRIO_COUNT, NM, CM, _>::new(
+            Cached::new(TreeCache::new(&multigraph), HybridParenting::new()),
+        )),
+        "SpsnContactParenting" => Box::new(SpsnContactParenting::<PRIO_COUNT, NM, CM, _>::new(
+            Cached::new(TreeCache::new(&multigraph), ContactParenting::new()),
+        )),
+        "SpsnContactParentingHop" => {
+            Box::new(SpsnContactParentingHop::<PRIO_COUNT, NM, CM, _>::new(
+                Cached::new(TreeCache::new(&multigraph), ContactParenting::new()),
+            ))
+        }
+        "VolCgrNodeParenting" => Box::new(VolCgrNodeParenting::new(
+            RoutingTable::new(),
+            NodeParenting::new(),
+        )),
+        "VolCgrNodeParentingHop" => Box::new(VolCgrNodeParentingHop::new(
+            RoutingTable::new(),
+            NodeParenting::new(),
+        )),
+        "VolCgrHybridParenting" => Box::new(VolCgrHybridParenting::new(
+            RoutingTable::new(),
+            HybridParenting::new(),
+        )),
+        "VolCgrHybridParentingHop" => Box::new(VolCgrHybridParentingHop::new(
+            RoutingTable::new(),
+            HybridParenting::new(),
+        )),
+        "VolCgrContactParenting" => Box::new(VolCgrContactParenting::new(
+            RoutingTable::new(),
+            ContactParenting::new(),
+        )),
+        "VolCgrContactParentingHop" => Box::new(VolCgrContactParentingHop::new(
+            RoutingTable::new(),
+            ContactParenting::new(),
+        )),
+        #[cfg(feature = "contact_suppression")]
+        "CgrFirstEndingHybridParenting" => Box::new(CgrSupressorHybridParenting::new(
+            Suppressor::new(HybridParenting::new(), ends_earlier_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(feature = "contact_suppression")]
+        "CgrFirstEndingHybridParentingHop" => Box::new(CgrSupressorHybridParentingHop::new(
+            Suppressor::new(HybridParenting::new(), ends_earlier_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(feature = "contact_suppression")]
+        "CgrFirstEndingContactParenting" => Box::new(CgrSupressorContactParenting::new(
+            Suppressor::new(ContactParenting::new(), ends_earlier_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(feature = "contact_suppression")]
+        "CgrFirstEndingContactParentingHop" => Box::new(CgrSupressorContactParentingHop::new(
+            Suppressor::new(ContactParenting::new(), ends_earlier_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(feature = "contact_suppression")]
+        "CgrFirstEndingNodeParenting" => Box::new(CgrSupressorNodeParenting::new(
+            Suppressor::new(NodeParenting::new(), ends_earlier_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(feature = "contact_suppression")]
+        "CgrFirstEndingNodeParentingHop" => Box::new(CgrSupressorNodeParentingHop::new(
+            Suppressor::new(NodeParenting::new(), ends_earlier_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        "CgrFirstDepletedHybridParenting" => Box::new(CgrSupressorHybridParenting::new(
+            Suppressor::new(HybridParenting::new(), had_less_volume_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        "CgrFirstDepletedHybridParentingHop" => Box::new(CgrSupressorHybridParentingHop::new(
+            Suppressor::new(HybridParenting::new(), had_less_volume_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        "CgrFirstDepletedContactParenting" => Box::new(CgrSupressorContactParenting::new(
+            Suppressor::new(ContactParenting::new(),had_less_volume_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        "CgrFirstDepletedContactParentingHop" => Box::new(CgrSupressorContactParentingHop::new(
+            Suppressor::new(ContactParenting::new(),had_less_volume_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        "CgrFirstDepletedNodeParenting" => Box::new(CgrSupressorNodeParenting::new(
+            Suppressor::new(NodeParenting::new(), had_less_volume_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        "CgrFirstDepletedNodeParentingHop" => Box::new(CgrSupressorNodeParentingHop::new(
+            Suppressor::new(NodeParenting::new(), had_less_volume_than, &multigraph),
+            RoutingTable::new(),
+            &multigraph,
+        )),
+
+        _ => return Err(ASABRError::ContactPlanError("Not a known router type !")),
+    };
+
+    Ok((multigraph, router))
 }
-//     if let Some(options) = spsn_options {
-//         let check_size = options.check_size;
-//         let check_priority = options.check_priority;
-//         let max_entries = options.max_entries;
-
-//         register_spsn_router!(
-//             SpsnNodeParenting,
-//             "SpsnNodeParenting",
-//             router_type,
-//             contact_plan,
-//             check_size,
-//             check_priority,
-//             max_entries
-//         );
-
-//         register_spsn_router!(
-//             SpsnNodeParentingHop,
-//             "SpsnNodeParentingHop",
-//             router_type,
-//             contact_plan,
-//             check_size,
-//             check_priority,
-//             max_entries
-//         );
-
-//         register_spsn_router!(
-//             SpsnHybridParenting,
-//             "SpsnHybridParenting",
-//             router_type,
-//             contact_plan,
-//             check_size,
-//             check_priority,
-//             max_entries
-//         );
-
-//         register_spsn_router!(
-//             SpsnHybridParentingHop,
-//             "SpsnHybridParentingHop",
-//             router_type,
-//             contact_plan,
-//             check_size,
-//             check_priority,
-//             max_entries
-//         );
-
-//         register_spsn_router!(
-//             SpsnContactParenting,
-//             "SpsnContactParenting",
-//             router_type,
-//             contact_plan,
-//             check_size,
-//             check_priority,
-//             max_entries
-//         );
-
-//         register_spsn_router!(
-//             SpsnContactParentingHop,
-//             "SpsnContactParentingHop",
-//             router_type,
-//             contact_plan,
-//             check_size,
-//             check_priority,
-//             max_entries
-//         );
-//     }
-
-//     register_cgr_router!(
-//         VolCgrNodeParenting,
-//         "VolCgrNodeParenting",
-//         router_type,
-//         contact_plan
-//     );
-
-//     register_cgr_router!(
-//         VolCgrHybridParenting,
-//         "VolCgrHybridParenting",
-//         router_type,
-//         contact_plan
-//     );
-
-//     register_cgr_router!(
-//         VolCgrHybridParentingHop,
-//         "VolCgrHybridParentingHop",
-//         router_type,
-//         contact_plan
-//     );
-
-//     register_cgr_router!(
-//         VolCgrNodeParentingHop,
-//         "VolCgrNodeParentingHop",
-//         router_type,
-//         contact_plan
-//     );
-
-//     register_cgr_router!(
-//         VolCgrContactParenting,
-//         "VolCgrContactParenting",
-//         router_type,
-//         contact_plan
-//     );
-
-//     register_cgr_router!(
-//         VolCgrContactParentingHop,
-//         "VolCgrContactParentingHop",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(feature = "contact_suppression")]
-//     register_cgr_router!(
-//         CgrFirstEndingHybridParentingHop,
-//         "CgrFirstEndingHybridParentingHop",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(feature = "contact_suppression")]
-//     register_cgr_router!(
-//         CgrFirstEndingHybridParenting,
-//         "CgrFirstEndingHybridParenting",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(feature = "contact_suppression")]
-//     register_cgr_router!(
-//         CgrFirstEndingNodeParentingHop,
-//         "CgrFirstEndingNodeParentingHop",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(feature = "contact_suppression")]
-//     register_cgr_router!(
-//         CgrFirstEndingNodeParenting,
-//         "CgrFirstEndingNodeParenting",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(feature = "contact_suppression")]
-//     register_cgr_router!(
-//         CgrFirstEndingContactParentingHop,
-//         "CgrFirstEndingContactParentingHop",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(feature = "contact_suppression")]
-//     register_cgr_router!(
-//         CgrFirstEndingContactParenting,
-//         "CgrFirstEndingContactParenting",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
-//     register_cgr_router!(
-//         CgrFirstDepletedHybridParentingHop,
-//         "CgrFirstDepletedHybridParentingHop",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
-//     register_cgr_router!(
-//         CgrFirstDepletedHybridParenting,
-//         "CgrFirstDepletedHybridParenting",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
-//     register_cgr_router!(
-//         CgrFirstDepletedNodeParentingHop,
-//         "CgrFirstDepletedNodeParentingHop",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
-//     register_cgr_router!(
-//         CgrFirstDepletedNodeParenting,
-//         "CgrFirstDepletedNodeParenting",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
-//     register_cgr_router!(
-//         CgrFirstDepletedContactParentingHop,
-//         "CgrFirstDepletedContactParentingHop",
-//         router_type,
-//         contact_plan
-//     );
-
-//     #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
-//     register_cgr_router!(
-//         CgrFirstDepletedContactParenting,
-//         "CgrFirstDepletedContactParenting",
-//         router_type,
-//         contact_plan
-//     );
-
-//     Err(ASABRError::ScheduleError(
-//         "Router type is invalid! (check for typo, disabled feature, or missing options for Spsn algos)",
-//     ))
-// }

@@ -12,7 +12,7 @@ pub mod pseg;
 pub mod seg;
 
 /// A segment represents a time interval with an associated value of type `T`.
-#[derive(Debug)]
+#[derive(Debug,Clone,Copy)]
 pub struct Segment<T> {
     /// The start time of the segment.
     pub start: Date,

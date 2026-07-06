@@ -18,7 +18,7 @@ use alloc::{vec, vec::Vec};
 ///
 /// The `SegmentationManager` uses different segments to manage free intervals, rate intervals, and delay intervals,
 /// which are applied in contact scheduling and transmission simulation.
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct SegmentationManager {
     /// A list of segments representing free intervals available for transmission.
     free_intervals: Vec<Segment<()>>,

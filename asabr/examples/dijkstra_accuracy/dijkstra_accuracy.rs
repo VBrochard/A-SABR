@@ -1,97 +1,62 @@
-use std::{
-    fs::File,
-    io::{BufRead, BufReader},
-};
 
 use a_sabr::{
     bundle::Bundle,
     contact_manager::legacy::evl::EVLManager,
     distance::sabr::SABR,
     errors::ASABRError,
+    mk_graph,
+    multigraph::NodeRef,
     node_manager::none::NoManagement,
-    pathfinding::{
-        Pathfinding, hybrid_parenting::HybridParentingPath, node_parenting::NodeParentingPath,
-    },
+    pathfinding::{ContactParenting, HybridParenting, NodeParenting, Pathfinding},
     types::NodeID,
-    utils::init_pathfinding,
 };
 
-use a_sabr::pathfinding::contact_parenting::ContactParentingPath;
-use static_assertions::assert_cfg;
 
 fn edge_case_example(cp_path: &str, dest: NodeID) -> Result<(), ASABRError> {
     let bundle = Bundle {
-        source: 0,
-        destinations: vec![dest],
+        source: 0.into(),
         priority: 0,
-        size: 0.0,
-        expiration: 1000.0,
+        size: 0,
+        expiration: 1000,
     };
-    let file = File::open(cp_path).unwrap();
-    let lines = BufReader::new(file).lines().map(|l| l.unwrap());
+    mk_graph!(graph, NoManagement, EVLManager, cp_path, file);
 
-    let mut node_graph = init_pathfinding::<
-        NoManagement,
-        EVLManager,
-        NodeParentingPath<NoManagement, EVLManager, SABR>,
-        _,
-        _,
-    >(lines)?;
+    // println!("Graph: {:#?}",graph);
 
-    let mut contact_graph = {
-        let file = File::open(cp_path).unwrap();
-        let lines = BufReader::new(file).lines().map(|l| l.unwrap());
-
-        init_pathfinding::<
-            NoManagement,
-            EVLManager,
-            ContactParentingPath<NoManagement, EVLManager, SABR>,
-            _,
-            _,
-        >(lines)?
+    let Ok(NodeRef::R(source)) = graph.node_id_ref(0.into()) else {
+        panic!()
     };
-
-    let file = File::open(cp_path).unwrap();
-    let lines = BufReader::new(file).lines().map(|l| l.unwrap());
-
-    let mut mpt_graph = init_pathfinding::<
-        NoManagement,
-        EVLManager,
-        HybridParentingPath<NoManagement, EVLManager, SABR>,
-        _,
-        _,
-    >(lines)?;
+    let mut dest = graph.node_id_ref(dest)?;
+    let mut node_finder = NodeParenting::<SABR>::new();
+    let mut contact_finder = ContactParenting::<_, _, SABR>::new();
+    let mut mpt_finder = HybridParenting::<SABR, _, _>::new();
 
     println!("\nRunning with contact plan location={cp_path}, and destination node={dest} ");
-    let res = node_graph.get_next(0.0, 0, &bundle, &[]).unwrap();
+    let res = node_finder
+        .find_path(&mut graph, 0, source, &bundle, &mut dest, None)?
+        .ok_or(ASABRError::DryRunError("No path found in node parenting test"))?;
     print!("\nWith NodeParentingPath pathfinding. ");
-    println!(
-        "{}",
-        res.by_destination[dest as usize].clone().unwrap().borrow()
-    );
+    println!("{:#?}", res.get_full_path(dest, &graph));
 
-    {
-        let res = contact_graph.get_next(0.0, 0, &bundle, &[]).unwrap();
-        print!("With ContactParentingPath pathfinding. ");
-        println!(
-            "{}",
-            res.by_destination[dest as usize].clone().unwrap().borrow()
-        );
-    }
+    let res = contact_finder
+        .find_path(&mut graph, 0, source, &bundle, &mut dest, None)?
+        .ok_or(ASABRError::DryRunError("No path found in contact parenting test"))?;
+    
+    print!("With ContactParentingPath pathfinding. ");
+    println!("{:?}", res.get_full_path(dest, &graph));
 
-    let res = mpt_graph.get_next(0.0, 0, &bundle, &[]).unwrap();
+    let res = mpt_finder
+        .find_path(&mut graph, 0, source, &bundle, &mut dest, None)?
+        .ok_or(ASABRError::DryRunError("No path found in hybrid test"))?;
     print!("With HybridParentingPath pathfinding. ");
-    println!(
-        "{}",
-        res.by_destination[dest as usize].clone().unwrap().borrow()
-    );
+    println!("{:?}", res.get_full_path(dest, &graph));
 
     Ok(())
 }
 
 fn main() -> Result<(), ASABRError> {
-    edge_case_example("asabr/examples/dijkstra_accuracy/contact_plan_1.cp", 3)?;
-    edge_case_example("asabr/examples/dijkstra_accuracy/contact_plan_2.cp", 4)?;
+    edge_case_example("asabr/examples/dijkstra_accuracy/contact_plan_1.cp", 3.into())?;
+    edge_case_example("asabr/examples/dijkstra_accuracy/contact_plan_2.cp", 4.into())?;
 
     println!(
         "\nN.B.: Results with the single end-to-end \"Path\" variant. We would get the same results with their \"Tree\" versions."

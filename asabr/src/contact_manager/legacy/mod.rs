@@ -13,7 +13,7 @@ pub mod qd;
 #[cfg(test)]
 pub(crate) mod test_helpers;
 
-#[derive(Debug)]
+#[derive(Debug,Clone,Copy)]
 /// A generic legacy volume manager. ETO, PB, ... are newtype on specialisation of this one
 struct VolumeManager<const PRIO_COUNT: usize, const BUDGETED: bool> {
     rate: DataRate,
@@ -147,6 +147,7 @@ where
 ///   considered as real time queue occupancy.
 /// - `prio_count`: The number of priority levels. A value of `1` means no priority logic is applied.
 /// - `with_budget`: A flag (`true` or `false`) to conditionnally add budgets (for priorities only).
+#[derive(Debug)]
 pub struct LegacyManager<
     const ADD_DELAY: bool,
     const AUTO_UPDATE: bool,

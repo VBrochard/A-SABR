@@ -86,6 +86,7 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
             next = self[next_via.parent_frag]?;
             r.push(next);
         }
+        r.reverse();
         Some(r)
     }
     pub fn full_path_rev<NM: NodeManager, CM: ContactManager>(
@@ -242,7 +243,7 @@ pub trait Pathfinding<'id, NM: NodeManager, CM: ContactManager, D: Destination<'
 /// # Returns
 ///
 /// An (potentially empty) iterator over effectively suitable PathFragment.
-#[inline(always)]
+// #[inline(always)]
 fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Contact<CM>>>(
     graph: &Multigraph<'id, NM, CM>,
     last_hop: (&PathFragment<'id>, usize),

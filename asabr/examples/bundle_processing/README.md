@@ -1,5 +1,7 @@
 ## Bundle Processing
 
+Not yet supported in the refactor. If you have a use for this feature, please open an issue
+
 ### Run the example
 
 

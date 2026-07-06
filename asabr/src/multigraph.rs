@@ -439,6 +439,25 @@ impl<'id> From<RNodeRef<'id>> for NodeID {
     }
 }
 
+impl<'id> TryFrom<NodeRef<'id>> for RNodeRef<'id> {
+    type Error = ASABRError;
+    fn try_from(value: NodeRef<'id>) -> Result<Self, Self::Error> {
+        match value {
+            NodeRef::R(rnode_ref) => Ok(rnode_ref),
+            NodeRef::V(_vnode_ref) => Err(ASABRError::ContactPlanError("This is not a rnode")),
+        }
+    }
+}
+impl<'id> TryFrom<NodeRef<'id>> for VNodeRef<'id> {
+    type Error = ASABRError;
+    fn try_from(value: NodeRef<'id>) -> Result<Self, Self::Error> {
+        match value {
+            NodeRef::V(vnode_ref) => Ok(vnode_ref),
+            NodeRef::R(_rnode_ref) => Err(ASABRError::ContactPlanError("This is not a vnode")),
+        }
+    }
+}
+
 impl<'id, NM: NodeManager, CM: ContactManager> Display for Multigraph<'id, NM, CM> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         writeln!(
@@ -484,6 +503,15 @@ impl<'id> NodeRef<'id> {
         match self {
             NodeRef::R(_rnode_ref) => None,
             NodeRef::V(vnode_ref) => Some(vnode_ref),
+        }
+    }
+}
+
+impl Display for NodeRef<'_>{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            NodeRef::R(rnode_ref) => write!(f,"rnode: {}",rnode_ref.index),
+            NodeRef::V(vnode_ref) => write!(f,"vnode: {}",vnode_ref.index),
         }
     }
 }

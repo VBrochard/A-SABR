@@ -19,6 +19,7 @@ pub mod from_tvgutil_file;
 ///   node's operations.
 /// - `CCM`: A type implementing the `ContactManager` trait, responsible for managing the
 ///   contact's operations.
+#[derive(Clone)]
 pub struct ContactPlan<NM: NodeManager, CM: ContactManager> {
     /// Real nodes sorted by ID. `INode`s and `ENode`s.
     pub(crate) realnodes: Vec<RealNode<NM>>,
@@ -28,6 +29,7 @@ pub struct ContactPlan<NM: NodeManager, CM: ContactManager> {
     pub(crate) contacts: Vec<(Contact<CM>, usize, usize)>,
 }
 
+#[derive(Clone)]
 pub enum RealNode<NM: NodeManager> {
     Enode(Node<NM>),
     Inode(Node<NM>),

@@ -38,7 +38,7 @@ impl From<(NodeID, NodeName)> for NodeInfo {
 /// # Type parameters
 /// - `NM`: A type implementing the `NodeManager` trait, responsible for managing the
 ///   node's operations.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node<NM: NodeManager> {
     /// The information about the node, including its ID and name.
     pub info: NodeInfo,

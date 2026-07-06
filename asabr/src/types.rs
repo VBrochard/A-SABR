@@ -10,7 +10,7 @@ pub type NodeIDMap = HashMap<NodeID, Vec<NodeID>>;
 /// Represents the unique inner identifier for a node.
 /// Abstract struct actually implementing from/to usize in order
 /// to prevent unsafe indexing (often use graph.flatten_route_id() instead of direct conversion into usize)
-#[derive(Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
 pub struct NodeID(usize);
 
 /// Represents a duration in millisecond. Technically, ASABR never input any duration value itself, so if all manager / contact plan / library user agree, use any unit you want
@@ -151,5 +151,11 @@ impl Display for TimeInterval {
 impl Display for NodeID {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl core::fmt::Debug for NodeID {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Debug::fmt(&self.0,f)
     }
 }

@@ -115,7 +115,7 @@ pub fn dijkstra<
                     bundle,
                     node,
                     delay,
-                    contacts.map(|(ctref, ct)| (node, &current_node.manager, ctref, ct)),
+                    contacts.map(|(ctref, ct)| (neighbor, &current_node.manager, ctref, ct)),
                     previous_node,
                 ) {
                     if !reachables[usize::from(neighbor)] {

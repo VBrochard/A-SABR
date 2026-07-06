@@ -14,7 +14,7 @@ use crate::{
 /// * `vid` - The unique identifier for the vnode.
 /// * `name` - The name associated with the vnode.
 /// * `rids` - A vector of the identifiers of each real node associated with the vnode.
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct VirtualNodeInfo {
     pub vid: NodeID,
     pub name: NodeName,
