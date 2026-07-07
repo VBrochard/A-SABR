@@ -93,7 +93,7 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
         &self,
         destination: NodeRef<'id>,
         graph: &Multigraph<'id, NM, CM>,
-    ) -> Option<impl Iterator<Item = PathFragment<'id>>> {
+    ) -> Option<PathIterator<'id,'a,'_>> {
         self[graph.into_usize(destination)].map(|_| PathIterator {
             output: self,
             last: Some(graph.into_usize(destination)),
@@ -173,7 +173,8 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
     }
 }
 
-struct PathIterator<'id, 'a, 'b> {
+#[derive(Debug)]
+pub struct PathIterator<'id, 'a, 'b> {
     output: &'b PathFindingOutput<'id, 'a>,
     last: Option<usize>,
 }
