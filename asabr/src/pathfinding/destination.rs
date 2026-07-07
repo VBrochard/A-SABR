@@ -24,6 +24,12 @@ pub trait Destination<'id> {
         bundle: &Bundle,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool;
+    /// Some pathfinder can provide performance improvement if this return Some
+    /// Returning the same id for two different destination may however prevent the pathfinder from finding the best path (or a path at all)
+    fn into_id(
+        &self,
+        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
+    ) -> Option<usize>;
 }
 
 pub enum Dest<'id> {
@@ -94,6 +100,19 @@ impl<'id> Destination<'id> for Dest<'id> {
                 .any(|dest| paths.validate(NodeRef::R(*dest), time, bundle, graph)),
         }
     }
+
+    fn into_id(
+        &self,
+        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
+    ) -> Option<usize> {
+        match self {
+            Dest::RNode(rnode_ref) => Some((*rnode_ref).into()),
+            Dest::VNode(vnode_ref) => Some(graph.into_usize((*vnode_ref).into())),
+            Dest::AllNodes() => Some(graph.get_routable_count()),
+            Dest::AnyCast(_rnode_refs) => None,
+            Dest::MultiCast(..) => None,
+        }
+    }
 }
 
 impl<'id> From<RNodeRef<'id>> for Dest<'id> {
@@ -152,6 +171,13 @@ impl<'id> Destination<'id> for RNodeRef<'id> {
     ) -> bool {
         paths.validate(NodeRef::R(*self), time, bundle, graph)
     }
+
+    fn into_id(
+        &self,
+        _graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
+    ) -> Option<usize> {
+        Some((*self).into())
+    }
 }
 
 impl<'id> Destination<'id> for VNodeRef<'id> {
@@ -176,6 +202,13 @@ impl<'id> Destination<'id> for VNodeRef<'id> {
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
         paths.validate(NodeRef::V(*self), time, bundle, graph)
+    }
+
+    fn into_id(
+        &self,
+        _graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
+    ) -> Option<usize> {
+        Some((*self).into())
     }
 }
 
@@ -204,6 +237,13 @@ impl<'id> Destination<'id> for NodeRef<'id> {
     ) -> bool {
         paths.validate(*self, time, bundle, graph)
     }
+
+    fn into_id(
+        &self,
+        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
+    ) -> Option<usize> {
+        Some(graph.into_usize(*self))
+    }
 }
 
 pub struct All;
@@ -229,5 +269,12 @@ impl Destination<'_> for All {
         _graph: &Multigraph<'_, impl NodeManager, impl ContactManager>,
     ) -> bool {
         true
+    }
+
+    fn into_id(
+        &self,
+        _graph: &Multigraph<'_, impl NodeManager, impl ContactManager>,
+    ) -> Option<usize> {
+        None
     }
 }

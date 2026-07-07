@@ -1,7 +1,7 @@
 extern crate alloc;
 use core::marker::PhantomData;
 
-use alloc::collections::BTreeMap;
+use alloc::{collections::BTreeMap, vec::Vec};
 
 pub mod cache;
 pub mod table;
@@ -10,9 +10,10 @@ use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
     errors::ASABRError,
-    multigraph::{Multigraph, NodeRef, RNodeRef},
+    multigraph::Multigraph,
     node_manager::NodeManager,
     pathfinding::{PathFindingOutput, Pathfinding, destination::Destination},
+    paths::{PathFragment, ViaHop},
     types::{Date, Volume},
 };
 
@@ -152,20 +153,14 @@ impl<
     }
 }
 
-/// Tells us a destination is guardable, necessary to use it with the guarded pathfinder.
-pub trait Guardable<'id>: Destination<'id> {
-    /// id to guard this destination on
-    fn as_id(&self, graph: &Multigraph<'id, impl NodeManager, impl ContactManager>) -> usize;
-}
-
 /// A Guard to avoid searching a path when useless. Bundles prio will be capped at prio_count (set to 1 to ignore bundles priorities)
 #[derive(Debug, Default)]
-pub struct Guard<'id, G: Guardable<'id>, const PRIO_COUNT: usize> {
+pub struct Guard<'id, D: Destination<'id>, const PRIO_COUNT: usize> {
     limits: BTreeMap<usize, [Option<Volume>; PRIO_COUNT]>,
-    _phantom: PhantomData<fn(&'id (), G)>,
+    _phantom: PhantomData<fn(&'id (), D)>,
 }
 
-impl<'id, const PRIO_COUNT: usize, G: Guardable<'id>> Guard<'id, G, PRIO_COUNT> {
+impl<'id, const PRIO_COUNT: usize, D: Destination<'id>> Guard<'id, D, PRIO_COUNT> {
     pub fn new() -> Self {
         Self {
             limits: BTreeMap::new(),
@@ -175,13 +170,13 @@ impl<'id, const PRIO_COUNT: usize, G: Guardable<'id>> Guard<'id, G, PRIO_COUNT> 
     pub fn set_limit(
         &mut self,
         bundle: &Bundle,
-        dest: &G,
+        dest: &D,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) {
-        let place = self
-            .limits
-            .entry(dest.as_id(graph))
-            .or_insert([None; PRIO_COUNT]);
+        let Some(id) = dest.into_id(graph) else {
+            return;
+        };
+        let place = self.limits.entry(id).or_insert([None; PRIO_COUNT]);
         for place in place.iter_mut().take(bundle.priority as usize + 1) {
             *place = Some(place.map_or(bundle.size, |old| old.min(bundle.size)))
         }
@@ -189,10 +184,13 @@ impl<'id, const PRIO_COUNT: usize, G: Guardable<'id>> Guard<'id, G, PRIO_COUNT> 
     pub fn abort(
         &self,
         bundle: &Bundle,
-        dest: &G,
+        dest: &D,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
-        match &self.limits.get(&dest.as_id(graph)) {
+        let Some(id) = dest.into_id(graph) else {
+            return false;
+        };
+        match &self.limits.get(&id) {
             None => false,
             Some(place) => place[(PRIO_COUNT - 1).min(bundle.priority as usize)]
                 .is_some_and(|limit| limit <= bundle.size),
@@ -200,13 +198,12 @@ impl<'id, const PRIO_COUNT: usize, G: Guardable<'id>> Guard<'id, G, PRIO_COUNT> 
     }
 }
 
-/// A guarded PathFinder. Once a node is marked as unreachable, never try to find a path to it again.
-/// The destination must implement Guardable
+/// A guarded PathFinder. Once a node is marked as unreachable, never try to find a path to it again. Rely on the destination .into_id() implementation
 pub struct Guarded<
     'id,
     const PRIO_COUNT: usize,
     P: Pathfinding<'id, NM, CM, D>,
-    D: Destination<'id> + Guardable<'id>,
+    D: Destination<'id>,
     NM: NodeManager,
     CM: ContactManager,
 > {
@@ -219,7 +216,7 @@ impl<
     'id,
     const PRIO_COUNT: usize,
     P: Pathfinding<'id, NM, CM, D>,
-    D: Destination<'id> + Guardable<'id>,
+    D: Destination<'id>,
     NM: NodeManager,
     CM: ContactManager,
 > Guarded<'id, PRIO_COUNT, P, D, NM, CM>
@@ -236,7 +233,7 @@ impl<
     'id,
     const PRIO_COUNT: usize,
     P: Pathfinding<'id, NM, CM, D>,
-    D: Destination<'id> + Guardable<'id>,
+    D: Destination<'id>,
     NM: NodeManager,
     CM: ContactManager,
 > Pathfinding<'id, NM, CM, D> for Guarded<'id, PRIO_COUNT, P, D, NM, CM>
@@ -271,13 +268,23 @@ impl<
     }
 }
 
-impl<'id> Guardable<'id> for NodeRef<'id> {
-    fn as_id(&self, graph: &Multigraph<'id, impl NodeManager, impl ContactManager>) -> usize {
-        graph.into_usize(*self)
+/// Intended for implementor of paths storage
+/// from a mutable access to a stored vec representing a pathfinding output, get mutable access to each of the components of the path to a destination
+///
+/// # Safety
+/// the "storage" vector should have no cycle (wich is true of any reasonable PathfindingOutput transformed into a vector)
+pub unsafe fn storage_get_path_mut<'id, 'a>(
+    storage: &'a mut [Option<PathFragment<'id>>],
+    destination: usize,
+) -> Option<Vec<&'a mut PathFragment<'id>>> {
+    // multiple borrow occur but we assume there can be no cycle, and as such the different borrow are actually all on different cells.
+    let storage = storage as *mut [Option<PathFragment<'id>>];
+    let next = unsafe { &mut (*storage)[destination] }.as_mut()?;
+    let mut collect = Vec::with_capacity(next.hop_count as usize + 1);
+    let mut next = collect.push_mut(next);
+    while let Some(ViaHop { parent_frag, .. }) = next.via {
+        next = collect.push_mut(unsafe { &mut (*storage)[parent_frag] }.as_mut()?)
     }
-}
-impl<'id> Guardable<'id> for RNodeRef<'id> {
-    fn as_id(&self, _graph: &Multigraph<'id, impl NodeManager, impl ContactManager>) -> usize {
-        (*self).into()
-    }
+    collect.reverse();
+    Some(collect)
 }

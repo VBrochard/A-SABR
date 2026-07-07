@@ -22,7 +22,6 @@ use crate::{
     routing::volcgr::VolCgr,
 };
 use alloc::boxed::Box;
-use generativity::Guard;
 
 pub type SpsnHybridParenting<'id, const PRIO_COUNT: usize, NM, CM, D> =
     Spsn<'id, PRIO_COUNT, NM, CM, HybridParenting<'id, SABR, NM, CM>, TreeCache<'id, NM, CM>, D>;

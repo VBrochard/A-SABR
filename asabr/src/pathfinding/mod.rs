@@ -100,12 +100,15 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
         })
     }
     pub fn clone<'b>(self) -> PathFindingOutput<'id, 'b> {
-        let vec = match self.path_tree {
-            Either::Left(value) => value.to_vec(),
-            Either::Right(vec) => vec,
-        };
+        let vec = self.as_vec();
         PathFindingOutput {
             path_tree: Either::Right(vec),
+        }
+    }
+    pub fn as_vec(self) -> Vec<Option<PathFragment<'id>>> {
+        match self.path_tree {
+            Either::Left(value) => value.to_vec(),
+            Either::Right(vec) => vec,
         }
     }
     pub fn validate(
@@ -173,6 +176,8 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
     }
 }
 
+
+#[derive(Clone)]
 struct PathIterator<'id, 'a, 'b> {
     output: &'b PathFindingOutput<'id, 'a>,
     last: Option<usize>,
