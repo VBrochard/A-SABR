@@ -93,7 +93,7 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
         &self,
         destination: NodeRef<'id>,
         graph: &Multigraph<'id, NM, CM>,
-    ) -> Option<impl Iterator<Item = PathFragment<'id>>> {
+    ) -> Option<impl Iterator<Item = PathFragment<'id>> + core::fmt::Display> {
         self[graph.into_usize(destination)].map(|_| PathIterator {
             output: self,
             last: Some(graph.into_usize(destination)),
@@ -173,6 +173,7 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
     }
 }
 
+#[derive(Clone)]
 struct PathIterator<'id, 'a, 'b> {
     output: &'b PathFindingOutput<'id, 'a>,
     last: Option<usize>,
@@ -187,6 +188,21 @@ impl<'id, 'a, 'b> Iterator for PathIterator<'id, 'a, 'b> {
             self.last = Some(hop.parent_frag)
         }
         Some(frag)
+    }
+}
+
+impl<'id, 'a, 'b> core::fmt::Display for PathIterator<'id, 'a, 'b> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut copy = self.clone().peekable();
+        if let Some(last) = copy.peek(){
+            let dest_id = usize::from(last.rx_node);
+            writeln!(f, "Route to node {} at t={} with {} hop(s):", dest_id, last.arrival_time.end, last.hop_count)?;
+        };
+        for frag in copy{
+            let node_id = usize::from(frag.rx_node);
+            writeln!(f, "        - Reach node {} at t={} with {} hop(s)", node_id, frag.arrival_time.end, frag.hop_count)?;       
+        }
+        Ok(())
     }
 }
 

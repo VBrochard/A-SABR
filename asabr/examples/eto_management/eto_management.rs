@@ -17,42 +17,6 @@ use a_sabr::pathfinding::Pathfinding;
 use generativity::make_guard;
 use static_assertions::assert_cfg;
 
-
-// Helper macro to format and patch route output, ensuring output parity
-// with legacy API behaviors (e.g., compensating for caching and size checks).
-macro_rules! print_route {
-    ($dest:expr, $frags:expr, $graph:expr, $bundle_id:expr) => {
-        let mut current_t = 15;
-        let mut out_str = String::new();
-        let mut hop = 0;
-        
-        for frag in &$frags {
-            let node_id = $graph.into_usize(NodeRef::R(frag.rx_node));
-            
-            if hop == 0 {
-                current_t = 15;
-            } else {
-                let reported = frag.arrival_time.end;
-                
-                if reported < current_t {
-                    current_t = current_t + 20; 
-                } else {
-                    current_t = reported;
-                }
-                
-                if node_id == 3 && $bundle_id == 2 {
-                    current_t = 240;
-                }
-            }
-            
-            out_str.push_str(&format!("        - Reach node {} at t={} with {} hop(s)\n", node_id, current_t, hop));
-            hop += 1;
-        }
-        println!("Route to node {} at t={} with {} hop(s):", $dest, current_t, hop - 1);
-        print!("{}", out_str);
-    };
-}
-
 fn main() {
     // We want variations for contact management, register ETO and EVL
 
@@ -94,9 +58,11 @@ fn main() {
         .unwrap()
         .unwrap();
 
-    // Extract the actual path from the output tree
+    let iter_1 = out.full_path_rev(dest_3, &multigraph).unwrap();
+    println!("{}", iter_1);
+    drop(iter_1);
+
     let route_1 = out.get_full_path(dest_3, &multigraph).unwrap();
-    print_route!(3, route_1, multigraph, 1);
 
     // Explicitly enqueue the bundle to simulate transmission delay
     let first_hop_contact = route_1[1].via.as_ref().unwrap().contact;
@@ -107,9 +73,20 @@ fn main() {
             .manual_enqueue(&bundle_1)
     );
 
+    for frag in route_1.iter().skip(2) {
+        if let Some(via) = &frag.via {
+            multigraph[via.contact].manager.manual_enqueue(&bundle_1);
+        }
+    }
+
 
 
     // Scenario 2: Route a second bundle to node 3
+
+    let mut router = Box::new(SpsnHybridParenting::<1, NoManagement, CMDynStandard, _>::new(
+        Cached::new(TreeCache::new(&multigraph), HybridParenting::new()),
+    ));
+
     let bundle_2 = Bundle {
         source: 0.into(),
         priority: 0,
@@ -123,8 +100,11 @@ fn main() {
         .unwrap()
         .unwrap();
 
+    let iter_2 = out_2.full_path_rev(dest_3, &multigraph).unwrap();
+    println!("{}", iter_2);
+    drop(iter_2);
+
     let route_2 = out_2.get_full_path(dest_3, &multigraph).unwrap();
-    print_route!(3, route_2, multigraph, 2);
 
     let first_hop_contact_2 = route_2[1].via.as_ref().unwrap().contact;
 
@@ -136,6 +116,12 @@ fn main() {
             .manual_enqueue(&bundle_2)
     );
 
+    for frag in route_2.iter().skip(2) {
+        if let Some(via) = &frag.via {
+            multigraph[via.contact].manager.manual_enqueue(&bundle_2);
+        }
+    }
+
     println!();
     println!(
         "Contact 0 has now 2 bundles in the queue (size: 2 x 20), unless we unqueue manually, the delay will be considered"
@@ -144,6 +130,10 @@ fn main() {
 
 
     // Scenario 3: Attempt to route a third bundle to node 4
+    let mut router = Box::new(SpsnHybridParenting::<1, NoManagement, CMDynStandard, _>::new(
+        Cached::new(TreeCache::new(&multigraph), HybridParenting::new()),
+    ));
+
     let bundle_3 = Bundle {
         source: 0.into(),
         priority: 0,
@@ -154,22 +144,19 @@ fn main() {
 
     // Should fail as the transmission queue is full
     let out_3 = router.find_path(&mut multigraph, 15, src_0, &bundle_3, &mut dest_4, None).unwrap();
-    println!(
-        "Sending bundle 3 to node 4, the routing output should be None: {}",
-        out_3.is_none() // Macro overrides this visual output slightly in real run
-    );
+    println!("Sending bundle 3 to node 4, the routing output should be None: {}", out_3.is_none());
+
     println!();
-    println!(
-        "Simulate transmission success of bundle_1, Contact 0 should not be a blocker anymore"
-    );
+    println!("Simulate transmission success of bundle_1, Contact 0 should not be a blocker anymore");
 
     // Free queue space and retry routing
-    println!(
-        "Dequeueing bundle_1, status : {}",
-        multigraph[first_hop_contact]
-            .manager
-            .manual_dequeue(&bundle_1)
-    );
+    println!("Dequeueing bundle_1, status : {}", multigraph[first_hop_contact].manager.manual_dequeue(&bundle_1));
+    for frag in route_1.iter().skip(2) {
+        if let Some(via) = &frag.via {
+            multigraph[via.contact].manager.manual_dequeue(&bundle_1);
+        }
+    }
+
     println!("Retry for bundle 3");
 
     // Recreate the router to forcefully flush its internal TreeCache, ensuring the new queue state is considered
@@ -181,8 +168,9 @@ fn main() {
         .find_path(&mut multigraph, 15, src_0, &bundle_3, &mut dest_4, None)
         .unwrap()
         .unwrap();
-    let route_4 = out_4.get_full_path(dest_4, &multigraph).unwrap();
-    print_route!(4, route_4, multigraph, 3);
+    let iter_4 = out_4.full_path_rev(dest_4, &multigraph).unwrap();
+    println!("{}", iter_4);
+    drop(iter_4);
 
     // === OUTPUT ===
     // Running with contact plan location=asabr/examples/dijkstra_accuracy/contact_plan_1.cp, and destination node=3
