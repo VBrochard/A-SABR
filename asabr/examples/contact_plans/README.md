@@ -3,7 +3,6 @@
 
 ### Run the example
 
-This example requires the `contact_work_area` feature:
 ```bash
 cargo run --example contact_plans
 ```

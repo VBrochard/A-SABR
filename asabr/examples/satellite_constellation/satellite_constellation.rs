@@ -130,7 +130,7 @@ fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<()
     
 
     match res {
-        Ok(Some(route)) => println!("{:?}", route.full_path_rev(destination, &graph)),
+        Ok(Some(route)) => println!("{}", route.full_path_rev(destination, &graph).unwrap()),
         _ => println!("No route found to node 2."),
     }
 
