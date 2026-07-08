@@ -46,7 +46,7 @@ fn main() -> Result<(), ASABRError> {
     let mut multigraph = Multigraph::new(id_guard, contact_plan)?;
 
     // We create a storage for the Paths
-    let table = TreeCache::new(&multigraph);
+    let table = TreeCache::new(&multigraph,10);
     // We initialize the routing algorithm with the storage and the contacts/nodes created thanks to the parser
     let mut spsn = SpsnHybridParenting::<3,_,_,_>::new(Cached::new(table, HybridParenting::new()));
 

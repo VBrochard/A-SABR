@@ -10,7 +10,7 @@ use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
     errors::ASABRError,
-    multigraph::{Multigraph, NodeRef, RNodeRef},
+    multigraph::Multigraph,
     node_manager::NodeManager,
     pathfinding::{PathFindingOutput, Pathfinding, destination::Destination},
     types::{Date, Volume},
@@ -21,7 +21,7 @@ use crate::{
 /// This trait defines methods for loading and storing pathfinding output
 /// related to routes in a routing system. Implementers of this trait must
 /// provide their own logic for handling route data.
-pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager> {
+pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager, D:Destination<'id>> {
     /// Loads the pathfinding output for a specific bundle, considering excluded nodes.
     ///
     /// # Parameters
@@ -37,6 +37,7 @@ pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager> {
     fn select<'a>(
         &'a mut self,
         bundle: &Bundle,
+        destination: &D,
         route_time: Date,
         curr_time: Option<Date>,
         multigraph: &Multigraph<'id, NM, CM>,
@@ -49,17 +50,22 @@ pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager> {
     /// * `tree` - A reference-counted mutable reference to the `PathfindingOutput` to store.
     fn store<'a>(
         &'a mut self,
+        tree: PathFindingOutput<'id, 'a>,
+        destination: &D,
         bundle: &Bundle,
-        tree: PathFindingOutput<'id, '_>,
+        _route_time: crate::types::Date,
+        _curr_time: Option<crate::types::Date>,
+        multigraph: &Multigraph<'id, NM, CM>
     ) -> PathFindingOutput<'id, 'a>;
 }
 
 pub struct NoStorage;
 
-impl<'id, NM: NodeManager, CM: ContactManager> PathsStorage<'id, NM, CM> for NoStorage {
+impl<'id, NM: NodeManager, CM: ContactManager, D:Destination<'id>> PathsStorage<'id, NM, CM,D> for NoStorage {
     fn select<'a>(
         &'a mut self,
         _bundle: &Bundle,
+        _destination: &D,
         _route_time: Date,
         _curr_time: Option<Date>,
         _multigraph: &Multigraph<'id, NM, CM>,
@@ -68,16 +74,20 @@ impl<'id, NM: NodeManager, CM: ContactManager> PathsStorage<'id, NM, CM> for NoS
     }
     fn store<'a>(
         &'a mut self,
+        tree: PathFindingOutput<'id, 'a>,
+        _destination: &D,
         _bundle: &Bundle,
-        tree: PathFindingOutput<'id, '_>,
+        _route_time: crate::types::Date,
+        _curr_time: Option<crate::types::Date>,
+        _multigraph: &Multigraph<'id, NM, CM>
     ) -> PathFindingOutput<'id, 'a> {
-        tree.clone()
+        tree.into_owned()
     }
 }
 
 pub struct Cached<
     'id,
-    S: PathsStorage<'id, NM, CM>,
+    S: PathsStorage<'id, NM, CM,D>,
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
@@ -90,7 +100,7 @@ pub struct Cached<
 
 impl<
     'id,
-    S: PathsStorage<'id, NM, CM>,
+    S: PathsStorage<'id, NM, CM,D>,
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
@@ -110,6 +120,7 @@ impl<
         let copy = &raw mut self.cache;
         match unsafe { copy.as_mut_unchecked() }.select(
             bundle,
+            destination,
             routing_time,
             prune_time,
             multigraph,
@@ -126,7 +137,7 @@ impl<
                 ) {
                     res @ (Ok(None) | Err(_)) => res,
                     Ok(Some(path)) => {
-                        Ok(Some(unsafe { copy.as_mut_unchecked() }.store(bundle, path)))
+                        Ok(Some(unsafe { copy.as_mut_unchecked() }.store(path,destination,bundle,routing_time,prune_time,multigraph)))
                     }
                 }
             }
@@ -136,7 +147,7 @@ impl<
 
 impl<
     'id,
-    S: PathsStorage<'id, NM, CM>,
+    S: PathsStorage<'id, NM, CM,D>,
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
@@ -152,20 +163,14 @@ impl<
     }
 }
 
-/// Tells us a destination is guardable, necessary to use it with the guarded pathfinder.
-pub trait Guardable<'id>: Destination<'id> {
-    /// id to guard this destination on
-    fn as_id(&self, graph: &Multigraph<'id, impl NodeManager, impl ContactManager>) -> usize;
-}
-
 /// A Guard to avoid searching a path when useless. Bundles prio will be capped at prio_count (set to 1 to ignore bundles priorities)
 #[derive(Debug, Default)]
-pub struct Guard<'id, G: Guardable<'id>, const PRIO_COUNT: usize> {
+pub struct Guard<'id, D: Destination<'id>, const PRIO_COUNT: usize> {
     limits: BTreeMap<usize, [Option<Volume>; PRIO_COUNT]>,
-    _phantom: PhantomData<fn(&'id (), G)>,
+    _phantom: PhantomData<fn(&'id (), D)>,
 }
 
-impl<'id, const PRIO_COUNT: usize, G: Guardable<'id>> Guard<'id, G, PRIO_COUNT> {
+impl<'id, const PRIO_COUNT: usize, D: Destination<'id>> Guard<'id, D, PRIO_COUNT> {
     pub fn new() -> Self {
         Self {
             limits: BTreeMap::new(),
@@ -175,13 +180,13 @@ impl<'id, const PRIO_COUNT: usize, G: Guardable<'id>> Guard<'id, G, PRIO_COUNT> 
     pub fn set_limit(
         &mut self,
         bundle: &Bundle,
-        dest: &G,
+        dest: &D,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) {
-        let place = self
-            .limits
-            .entry(dest.as_id(graph))
-            .or_insert([None; PRIO_COUNT]);
+        let Some(id) = dest.into_id(graph) else {
+            return;
+        };
+        let place = self.limits.entry(id).or_insert([None; PRIO_COUNT]);
         for place in place.iter_mut().take(bundle.priority as usize + 1) {
             *place = Some(place.map_or(bundle.size, |old| old.min(bundle.size)))
         }
@@ -189,10 +194,13 @@ impl<'id, const PRIO_COUNT: usize, G: Guardable<'id>> Guard<'id, G, PRIO_COUNT> 
     pub fn abort(
         &self,
         bundle: &Bundle,
-        dest: &G,
+        dest: &D,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
-        match &self.limits.get(&dest.as_id(graph)) {
+        let Some(id) = dest.into_id(graph) else {
+            return false;
+        };
+        match &self.limits.get(&id) {
             None => false,
             Some(place) => place[(PRIO_COUNT - 1).min(bundle.priority as usize)]
                 .is_some_and(|limit| limit <= bundle.size),
@@ -200,13 +208,12 @@ impl<'id, const PRIO_COUNT: usize, G: Guardable<'id>> Guard<'id, G, PRIO_COUNT> 
     }
 }
 
-/// A guarded PathFinder. Once a node is marked as unreachable, never try to find a path to it again.
-/// The destination must implement Guardable
+/// A guarded PathFinder. Once a node is marked as unreachable, never try to find a path to it again. Rely on the destination .into_id() implementation
 pub struct Guarded<
     'id,
     const PRIO_COUNT: usize,
     P: Pathfinding<'id, NM, CM, D>,
-    D: Destination<'id> + Guardable<'id>,
+    D: Destination<'id>,
     NM: NodeManager,
     CM: ContactManager,
 > {
@@ -219,7 +226,7 @@ impl<
     'id,
     const PRIO_COUNT: usize,
     P: Pathfinding<'id, NM, CM, D>,
-    D: Destination<'id> + Guardable<'id>,
+    D: Destination<'id>,
     NM: NodeManager,
     CM: ContactManager,
 > Guarded<'id, PRIO_COUNT, P, D, NM, CM>
@@ -236,7 +243,7 @@ impl<
     'id,
     const PRIO_COUNT: usize,
     P: Pathfinding<'id, NM, CM, D>,
-    D: Destination<'id> + Guardable<'id>,
+    D: Destination<'id>,
     NM: NodeManager,
     CM: ContactManager,
 > Pathfinding<'id, NM, CM, D> for Guarded<'id, PRIO_COUNT, P, D, NM, CM>
@@ -271,13 +278,4 @@ impl<
     }
 }
 
-impl<'id> Guardable<'id> for NodeRef<'id> {
-    fn as_id(&self, graph: &Multigraph<'id, impl NodeManager, impl ContactManager>) -> usize {
-        graph.into_usize(*self)
-    }
-}
-impl<'id> Guardable<'id> for RNodeRef<'id> {
-    fn as_id(&self, _graph: &Multigraph<'id, impl NodeManager, impl ContactManager>) -> usize {
-        (*self).into()
-    }
-}
+

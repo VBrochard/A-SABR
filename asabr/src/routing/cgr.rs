@@ -19,7 +19,7 @@ pub struct Cgr<
     NM: NodeManager,
     CM: ContactManager,
     P: Pathfinding<'id, NM, CM, D>,
-    S: PathsStorage<'id, NM, CM>,
+    S: PathsStorage<'id, NM, CM, D>,
     D: Destination<'id>,
 > {
     storage: S,
@@ -33,7 +33,7 @@ impl<
     NM: NodeManager,
     CM: ContactManager,
     P: Pathfinding<'id, NM, CM, D>,
-    S: PathsStorage<'id, NM, CM>,
+    S: PathsStorage<'id, NM, CM, D>,
     D: Destination<'id>,
 > Pathfinding<'id, NM, CM, D> for Cgr<'id, NM, CM, P, S, D>
 {
@@ -49,9 +49,13 @@ impl<
         // Concurent uses of copy validated by polonius
         let copy = &raw mut self.storage;
 
-        if let ret @ (Ok(Some(_)) | Err(_)) =
-            unsafe { copy.as_mut_unchecked() }.select(bundle, routing_time, prune_time, multigraph)
-        {
+        if let ret @ (Ok(Some(_)) | Err(_)) = unsafe { copy.as_mut_unchecked() }.select(
+            bundle,
+            destination,
+            routing_time,
+            prune_time,
+            multigraph,
+        ) {
             return ret;
         }
         let mut bundle_copy = bundle.clone();
@@ -69,9 +73,19 @@ impl<
             ) {
                 Ok(None) => return Ok(None),
                 Err(e) => return Err(e),
-                Ok(Some(path)) => {
-                    if destination.validate(&path, routing_time, bundle, multigraph) {
-                        return Ok(Some(unsafe { copy.as_mut_unchecked() }.store(bundle, path)));
+                Ok(Some(mut path)) => {
+                    // Safety: NOT SAFE
+                    // TODO: make it safe
+                    if unsafe { destination.validate(&mut path, routing_time, bundle, multigraph) }
+                    {
+                        return Ok(Some(unsafe { copy.as_mut_unchecked() }.store(
+                            path.into_owned(),
+                            destination,
+                            bundle,
+                            routing_time,
+                            prune_time,
+                            multigraph,
+                        )));
                     }
                 }
             }
@@ -83,7 +97,7 @@ impl<
     NM: NodeManager,
     CM: ContactManager,
     P: Pathfinding<'id, NM, CM, D>,
-    S: PathsStorage<'id, NM, CM>,
+    S: PathsStorage<'id, NM, CM, D>,
     D: Destination<'id>,
 > Cgr<'id, NM, CM, P, S, D>
 {

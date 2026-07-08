@@ -507,11 +507,22 @@ impl<'id> NodeRef<'id> {
     }
 }
 
-impl Display for NodeRef<'_>{
+impl<'id> From<RNodeRef<'id>> for NodeRef<'id> {
+    fn from(value: RNodeRef<'id>) -> Self {
+        Self::R(value)
+    }
+}
+impl<'id> From<VNodeRef<'id>> for NodeRef<'id> {
+    fn from(value: VNodeRef<'id>) -> Self {
+        Self::V(value)
+    }
+}
+
+impl Display for NodeRef<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            NodeRef::R(rnode_ref) => write!(f,"rnode: {}",rnode_ref.index),
-            NodeRef::V(vnode_ref) => write!(f,"vnode: {}",vnode_ref.index),
+            NodeRef::R(rnode_ref) => write!(f, "rnode: {}", rnode_ref.index),
+            NodeRef::V(vnode_ref) => write!(f, "vnode: {}", vnode_ref.index),
         }
     }
 }
