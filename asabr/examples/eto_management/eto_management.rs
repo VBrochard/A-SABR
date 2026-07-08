@@ -33,7 +33,7 @@ fn main() {
     let mut multigraph = Multigraph::new(id, contact_plan).unwrap();
 
     let mut router = Box::new(SpsnHybridParenting::<1, NoManagement, CMDynStandard, _>::new(
-        Cached::new(TreeCache::new(&multigraph), HybridParenting::new()),
+        Cached::new(TreeCache::new(&multigraph,10), HybridParenting::new()),
     ));
 
 
@@ -84,7 +84,7 @@ fn main() {
     // Scenario 2: Route a second bundle to node 3
 
     let mut router = Box::new(SpsnHybridParenting::<1, NoManagement, CMDynStandard, _>::new(
-        Cached::new(TreeCache::new(&multigraph), HybridParenting::new()),
+        Cached::new(TreeCache::new(&multigraph,10), HybridParenting::new()),
     ));
 
     let bundle_2 = Bundle {
@@ -131,7 +131,7 @@ fn main() {
 
     // Scenario 3: Attempt to route a third bundle to node 4
     let mut router = Box::new(SpsnHybridParenting::<1, NoManagement, CMDynStandard, _>::new(
-        Cached::new(TreeCache::new(&multigraph), HybridParenting::new()),
+        Cached::new(TreeCache::new(&multigraph,10), HybridParenting::new()),
     ));
 
     let bundle_3 = Bundle {
@@ -161,7 +161,7 @@ fn main() {
 
     // Recreate the router to forcefully flush its internal TreeCache, ensuring the new queue state is considered
     let mut router = Box::new(SpsnHybridParenting::<1, NoManagement, CMDynStandard, _>::new(
-        Cached::new(TreeCache::new(&multigraph), HybridParenting::new()),
+        Cached::new(TreeCache::new(&multigraph,10), HybridParenting::new()),
     ));
 
     let out_4 = router

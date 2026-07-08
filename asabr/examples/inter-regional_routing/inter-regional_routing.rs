@@ -39,7 +39,7 @@ fn main() -> Result<(), ASABRError> {
     println!("\n---\n");
 
     // We create a storage for the paths and initialize SPSN with the current pathfinding API.
-    let table = TreeCache::new(&graph);
+    let table = TreeCache::new(&graph,10);
     let mut spsn = SpsnHybridParenting::<1, NoManagement, CMDynStandard, _>::new(Cached::new(
         table,
         HybridParenting::new(),

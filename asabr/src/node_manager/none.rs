@@ -6,7 +6,7 @@ use crate::types::{NodeID, TimeInterval};
 use super::NodeManager;
 
 /// Use this manager if no node management is needed.
-#[derive(Debug, Default,Clone,Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct NoManagement {}
 empty_parse!(NoManagement);
 
@@ -21,7 +21,7 @@ impl NodeManager for NoManagement {
         _bundle: &Bundle,
         _reception: TimeInterval,
         _sender: NodeID,
-        _transmition: TimeInterval,
+        _transmission: TimeInterval,
         _next: NodeID,
     ) -> bool {
         true
@@ -32,9 +32,9 @@ impl NodeManager for NoManagement {
         _bundle: &Bundle,
         _reception: TimeInterval,
         _sender: NodeID,
-        transmitions: &[(TimeInterval, NodeID)],
+        transmissions: &[(TimeInterval, NodeID)],
     ) -> Option<usize> {
-        Some(transmitions.len())
+        Some(transmissions.len())
     }
 
     fn commit(
@@ -42,7 +42,7 @@ impl NodeManager for NoManagement {
         _bundle: &Bundle,
         _reception: TimeInterval,
         _sender: NodeID,
-        _transmitions: &[(TimeInterval, NodeID)],
+        _transmissions: &[(TimeInterval, NodeID)],
     ) -> Result<(), ASABRError> {
         Ok(())
     }

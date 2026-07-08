@@ -98,23 +98,14 @@ pub fn dijkstra<
                 if !work_area.node_check(NodeRef::R(neighbor), multigraph) {
                     continue;
                 }
-                let delay = match previous_node {
-                    None => current_time,
-                    Some(tx_node) => current_node.manager.delay(
-                        bundle,
-                        path.arrival_time,
-                        tx_node.into(),
-                        neighbor.into(),
-                    ),
-                };
                 if let Some(path) = try_make_hop(
                     multigraph,
                     (&path, viaref),
                     bundle,
                     node,
-                    delay,
                     contacts.map(|(ctref, ct)| (neighbor, &current_node.manager, ctref, ct)),
                     previous_node,
+                    neighbor.into(),
                 ) {
                     if !reachables[usize::from(neighbor)] {
                         reachable += 1;
@@ -130,23 +121,14 @@ pub fn dijkstra<
 
             for (vnoderef, contacts) in iter_v {
                 if dest.is_useful(vnoderef) {
-                    let delay = match previous_node {
-                        None => current_time,
-                        Some(tx_node) => current_node.manager.delay(
-                            bundle,
-                            path.arrival_time,
-                            tx_node.into(),
-                            multigraph.vnode_id(vnoderef),
-                        ),
-                    };
                     if let Some(path) = try_make_hop(
                         multigraph,
                         (&path, viaref),
                         bundle,
                         node,
-                        delay,
                         contacts.map(|(rre, rno, ctre, ct)| (rre, &rno.manager, ctre, ct)),
                         previous_node,
+                        multigraph.vnode_id(vnoderef),
                     ) {
                         if !reachables_v[usize::from(vnoderef)] {
                             reachable += 1;

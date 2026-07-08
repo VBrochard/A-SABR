@@ -27,28 +27,34 @@ pub fn flatten<'id, 'a>(
 
     for i in 0..elided_tree.len() {
         if let Some(mut frag) = elided_tree[i] {
+            println!("frag at {i}");
             let mut index = i;
             loop {
                 if let Some(via) = frag.via.as_mut() {
+                    println!("parent: {}",via.parent_frag);
                     if let Some(new_idx) = new_indexs[via.parent_frag] {
+                        println!("found as {new_idx}");
                         via.parent_frag = new_idx;
                         elided_tree[index] = Some(frag);
                         break;
                     } else {
                         let old_idx = via.parent_frag;
                         let new_idx = elided_tree.len();
-                        elided_tree.push(None);
+                        new_indexs[old_idx] = Some(new_idx);
+
+
                         via.parent_frag = new_idx;
+                        elided_tree[index] = Some(frag);
                         frag = paths[old_idx];
+
                         index = new_idx;
+                        elided_tree.push(None);
                     }
                 } else {
                     elided_tree[index] = Some(frag);
                     break;
                 }
             }
-        } else {
-            continue;
         }
     }
 

@@ -12,7 +12,7 @@ use crate::node_manager::NodeManager;
 use crate::parsing::Either;
 use crate::pathfinding::destination::Destination;
 use crate::paths::{PathFragment, ViaHop};
-use crate::types::{Date, TimeInterval};
+use crate::types::{Date, NodeID, TimeInterval};
 
 pub mod dijkstra;
 pub mod dijkstra_impl;
@@ -197,7 +197,7 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct PathIterator<'id, 'a, 'b> {
     output: &'b PathFindingOutput<'id, 'a>,
     last: Option<usize>,
@@ -218,13 +218,21 @@ impl<'id, 'a, 'b> Iterator for PathIterator<'id, 'a, 'b> {
 impl<'id, 'a, 'b> core::fmt::Display for PathIterator<'id, 'a, 'b> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut copy = self.clone().peekable();
-        if let Some(last) = copy.peek(){
+        if let Some(last) = copy.peek() {
             let dest_id = usize::from(last.rx_node);
-            writeln!(f, "Route to node {} at t={} with {} hop(s):", dest_id, last.arrival_time.end, last.hop_count)?;
+            writeln!(
+                f,
+                "Route to node {} at t={} with {} hop(s):",
+                dest_id, last.arrival_time.end, last.hop_count
+            )?;
         };
-        for frag in copy{
+        for frag in copy {
             let node_id = usize::from(frag.rx_node);
-            writeln!(f, "        - Reach node {} at t={} with {} hop(s)", node_id, frag.arrival_time.end, frag.hop_count)?;       
+            writeln!(
+                f,
+                "        - Reach node {} at t={} with {} hop(s)",
+                node_id, frag.arrival_time.end, frag.hop_count
+            )?;
         }
         Ok(())
     }
@@ -283,16 +291,25 @@ pub trait Pathfinding<'id, NM: NodeManager, CM: ContactManager, D: Destination<'
 /// # Returns
 ///
 /// An (potentially empty) iterator over effectively suitable PathFragment.
-// #[inline(always)]
+#[inline(always)]
 fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Contact<CM>>>(
     graph: &Multigraph<'id, NM, CM>,
     last_hop: (&PathFragment<'id>, usize),
     bundle: &Bundle,
     current_node: RNodeRef<'id>,
-    send_time: Date,
     contacts: impl Iterator<Item = (RNodeRef<'id>, &'a NM, ContactRef<'id>, T)>,
     previous_node: Option<RNodeRef<'id>>,
+    neigbhoor_id: NodeID,
 ) -> Option<PathFragment<'id>> {
+    let send_time = match previous_node {
+        None => last_hop.0.arrival_time.end,
+        Some(tx_node) => graph[current_node].manager.delay(
+            bundle,
+            last_hop.0.arrival_time,
+            tx_node.into(),
+            neigbhoor_id,
+        ),
+    };
     // remove suppressed contacts
     #[allow(unused_variables)]
     let suppressed = contacts.filter(|(_, _, _, ct)| {
@@ -302,10 +319,10 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
         }
         true
     });
+    //                    Selected contact, rx_time,     dest node,     tx_time
     let mut best: Option<(ContactRef<'id>, TimeInterval, RNodeRef<'id>, TimeInterval)> = None;
 
     for (next_node_ref, next_node_manager, ctref, ct) in suppressed {
-        // not better
         if let Some((_, time, _, _)) = best
             && time.end <= ct.as_ref().lifespan.start
         {
@@ -331,7 +348,7 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
                     last_hop.0.arrival_time,
                     previous.into(),
                     txdata.tx_window,
-                    next_node_ref.into(),
+                    neigbhoor_id,
                 )
             {
                 //early return if current node refuse, as it is unlikely making it wait for the bundle longer will make it accept

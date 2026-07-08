@@ -37,26 +37,28 @@ pub trait NodeManager {
     fn accept(&self, bundle: &Bundle, time: TimeInterval, sender: NodeID) -> bool;
 
     #[allow(unused_variables)]
-    /// date at wich we can start to resend the bundle. Acount for both delay at reception and delay upon sending
+    /// date at wich we can start to resend the bundle. Account for both delay at reception and delay upon sending
+    /// warning: next_vertex ID can be a VNode ID
     fn delay(
         &self,
         bundle: &Bundle,
         reception: TimeInterval,
         sender: NodeID,
-        next: NodeID,
+        next_vertex: NodeID,
     ) -> Date {
         reception.end
     }
 
     #[allow(unused_variables)]
     /// Check if this retention on the node is allowed, used to compute possible routes during path-finding
+    /// warning: next_vertex ID can be a VNode ID
     fn dry_run_retention(
         &self,
         bundle: &Bundle,
         reception: TimeInterval,
         sender: NodeID,
-        transmition: TimeInterval,
-        next: NodeID,
+        transmission: TimeInterval,
+        next_vertex: NodeID,
     ) -> bool;
 
     /// Return None if the node cannot accept the paquet, Some(n) if it can accept the paquet and retransmit it to the firsts n elements of transmitions
@@ -69,7 +71,7 @@ pub trait NodeManager {
         bundle: &Bundle,
         reception: TimeInterval,
         sender: NodeID,
-        transmitions: &[(TimeInterval, NodeID)],
+        transmissions: &[(TimeInterval, NodeID)],
     ) -> Option<usize>;
 
     /// Updates ressources for this node, based on the given transmition
@@ -82,7 +84,7 @@ pub trait NodeManager {
         bundle: &Bundle,
         reception: TimeInterval,
         sender: NodeID,
-        transmitions: &[(TimeInterval, NodeID)],
+        transmissions: &[(TimeInterval, NodeID)],
     ) -> Result<(), ASABRError>;
 }
 

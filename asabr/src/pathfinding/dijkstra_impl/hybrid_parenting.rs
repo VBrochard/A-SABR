@@ -90,26 +90,53 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM> + HybridParen
             NodeRef::R(actual_node) => {
                 let new_idx = self.possible_paths.len();
                 let routes_for_node = &mut self.by_destination[usize::from(actual_node)];
-                for prop in routes_for_node.iter() {
-                    if D::cmp(&proposition, &self.possible_paths[*prop], graph, bundle)
+                if let Some(fst) = routes_for_node.first_mut() {
+                    if D::cmp(&proposition, &self.possible_paths[*fst], graph, bundle)
                         == Ordering::Less
                     {
-                        self.possible_paths[*prop] = proposition;
-                        return Some(*prop);
+                        if D::keep_both(
+                            &proposition,
+                            &self.possible_paths[*fst],
+                            graph,
+                            bundle,
+                            actual_node,
+                        ) {
+                            let tmp = *fst;
+                            *fst = new_idx;
+                            routes_for_node.push(tmp);
+                            self.possible_paths.push(proposition);
+                            Some(new_idx)
+                        } else {
+                            self.possible_paths[*fst] = proposition;
+                            Some(*fst)
+                        }
+                    } else {
+                        for prop in routes_for_node.iter() {
+                            if D::cmp(&proposition, &self.possible_paths[*prop], graph, bundle)
+                                == Ordering::Less
+                            {
+                                self.possible_paths[*prop] = proposition;
+                                return Some(*prop);
+                            }
+                            if !D::keep_both(
+                                &proposition,
+                                &self.possible_paths[*prop],
+                                graph,
+                                bundle,
+                                actual_node,
+                            ) {
+                                return None;
+                            }
+                        }
+                        routes_for_node.push(new_idx);
+                        self.possible_paths.push(proposition);
+                        Some(new_idx)
                     }
-                    if !D::keep_both(
-                        &proposition,
-                        &self.possible_paths[*prop],
-                        graph,
-                        bundle,
-                        actual_node,
-                    ) {
-                        return None;
-                    }
+                } else {
+                    routes_for_node.push(new_idx);
+                    self.possible_paths.push(proposition);
+                    Some(new_idx)
                 }
-                routes_for_node.push(new_idx);
-                self.possible_paths.push(proposition);
-                Some(new_idx)
             }
             NodeRef::V(vnode) => match &mut self.by_dest_vnode[usize::from(vnode)] {
                 a @ None => {

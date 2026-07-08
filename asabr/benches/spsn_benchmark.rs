@@ -10,8 +10,8 @@ use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main
 pub fn benchmark(c: &mut Criterion) {
     let ptvg_filepath = "benches/ptvg_files/sample1.json";
 
-    let source = 178.into();
-    let destinatation = 159.into();
+    let source = 0.into();
+    let destinatation = 79.into();
     let bundle = Bundle {
         source,
         priority: 0,
