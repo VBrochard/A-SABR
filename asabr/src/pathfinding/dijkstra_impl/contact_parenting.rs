@@ -1,5 +1,9 @@
 extern crate alloc;
-use alloc::{collections::BTreeSet, vec, vec::Vec};
+use alloc::{
+    collections::btree_map::{BTreeMap, Entry},
+    vec,
+    vec::Vec,
+};
 use core::{cmp::Ordering, marker::PhantomData};
 
 use crate::{
@@ -35,7 +39,7 @@ pub struct ContactParentingWorkArea<'id, NM: NodeManager, CM: ContactManager, D:
     by_destination: Vec<Option<usize>>,
     by_dest_vnode: Vec<Option<usize>>,
     /// Visited contacts, grouped by node.
-    visited: Vec<BTreeSet<ContactRef<'id>>>,
+    visited: Vec<BTreeMap<ContactRef<'id>, usize>>,
     _phantom: PhantomData<fn(NM, CM, D)>,
 }
 
@@ -49,7 +53,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
             possible_paths: Vec::new(),
             by_destination: vec![None; graph.get_rnode_count()],
             by_dest_vnode: vec![None; graph.get_vnode_count()],
-            visited: vec![BTreeSet::new(); graph.get_nonvirtualnode_count()],
+            visited: vec![BTreeMap::new(); graph.get_nonvirtualnode_count()],
             _phantom: PhantomData,
         }
     }
@@ -67,35 +71,53 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
         graph: &Multigraph<'id, NM, CM>,
         bundle: &Bundle,
     ) -> Option<usize> {
+        // println!("prop for {node}: {proposition}");
         let new_idx = self.possible_paths.len();
-        let route_for_node = match node {
-            NodeRef::R(rnode) => &mut self.by_destination[usize::from(rnode)],
-            NodeRef::V(vnode) => &mut self.by_dest_vnode[usize::from(vnode)],
-        };
+        let result;
 
-        if proposition.via.is_none_or(|ViaHop { contact, .. }| {
-            self.visited[usize::from(proposition.rx_node)].insert(contact)
-        }) {
-            match route_for_node {
-                None => {
-                    self.possible_paths.push(proposition);
-                    *route_for_node = Some(new_idx);
-                    Some(new_idx)
-                }
-                Some(old) => {
-                    if D::cmp(&proposition, &self.possible_paths[*old], graph, bundle)
-                        == Ordering::Less
-                    {
-                        self.possible_paths[*old] = proposition;
-                        Some(*old)
-                    } else {
-                        None
+        match proposition.via {
+            None => {
+                self.possible_paths.push(proposition);
+                result = new_idx;
+            }
+            Some(ViaHop { contact, .. }) => {
+                match self.visited[usize::from(proposition.rx_node)].entry(contact) {
+                    Entry::Vacant(vacant_entry) => {
+                        vacant_entry.insert(new_idx);
+                        self.possible_paths.push(proposition);
+                        result = new_idx;
+                    }
+                    Entry::Occupied(occupied_entry) => {
+                        let old = *occupied_entry.get();
+                        if D::cmp(&proposition, &self.possible_paths[old], graph, bundle)
+                            == Ordering::Less
+                        {
+                            result = old;
+                            self.possible_paths[old] = proposition
+                        } else {
+                            return None;
+                        }
                     }
                 }
             }
-        } else {
-            None
         }
+        let for_node = match node {
+            NodeRef::R(rnode) => &mut self.by_destination[usize::from(rnode)],
+            NodeRef::V(vnode) => &mut self.by_dest_vnode[usize::from(vnode)],
+        };
+        match for_node {
+            Some(for_node) => {
+                if D::cmp(&proposition, &self.possible_paths[*for_node], graph, bundle)
+                    == Ordering::Less
+                {
+                    *for_node = result;
+                }
+            }
+            None => {
+                *for_node = Some(result);
+            }
+        }
+        Some(result)
     }
 
     fn node_check(&mut self, _node: NodeRef<'id>, _graph: &Multigraph<'id, NM, CM>) -> bool {
@@ -117,7 +139,11 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
                     self.by_destination[usize::from(rnode)] == Some(viaref),
                     prev,
                 ),
-                NodeRef::V(_vnode) => (true, true, prev),
+                NodeRef::V(vnode) => (
+                    true,
+                    self.by_dest_vnode[usize::from(vnode)] == Some(viaref),
+                    prev,
+                ),
             }
         } else {
             (false, false, None)
