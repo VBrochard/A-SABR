@@ -1,6 +1,3 @@
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
 
 use a_sabr::bundle::Bundle;
 use a_sabr::choices;
@@ -12,12 +9,13 @@ use a_sabr::node_manager::none::NoManagement;
 use a_sabr::parse_transparent;
 use a_sabr::parsing::LexFrom;
 use a_sabr::pathfinding::Pathfinding;
-use a_sabr::pathfinding::hybrid_parenting::HybridParentingPath;
+use a_sabr::pathfinding::HybridParenting;
 use a_sabr::transparent_NM;
 use a_sabr::types::Date;
 use a_sabr::types::Duration;
-use a_sabr::utils::init_pathfinding;
-use static_assertions::assert_cfg;
+use a_sabr::types::TimeInterval;
+use a_sabr::types::NodeID;
+use a_sabr::mk_graph;
 
 #[derive(Debug)]
 struct NoRetention {
@@ -27,29 +25,29 @@ struct NoRetention {
 impl NodeManager for NoRetention {
     fn accept(
         &self,
-        bundle: &Bundle,
-        time: a_sabr::types::TimeInterval,
-        sender: a_sabr::types::NodeID,
+        _bundle: &Bundle,
+        _time: a_sabr::types::TimeInterval,
+        _sender: a_sabr::types::NodeID,
     ) -> bool {
         true
     }
 
     fn dry_run_retention(
         &self,
-        bundle: &Bundle,
+        _bundle: &Bundle,
         reception: a_sabr::types::TimeInterval,
-        sender: a_sabr::types::NodeID,
+        _sender: a_sabr::types::NodeID,
         transmition: a_sabr::types::TimeInterval,
-        next: a_sabr::types::NodeID,
+        _next: a_sabr::types::NodeID,
     ) -> bool {
         transmition.end - reception.start < self.max_proc_time
     }
 
     fn dry_run_multi(
         &self,
-        bundle: &Bundle,
+        _bundle: &Bundle,
         reception: a_sabr::types::TimeInterval,
-        sender: a_sabr::types::NodeID,
+        _sender: a_sabr::types::NodeID,
         transmitions: &[(a_sabr::types::TimeInterval, a_sabr::types::NodeID)],
     ) -> Option<usize> {
         let r = transmitions
@@ -62,10 +60,10 @@ impl NodeManager for NoRetention {
 
     fn commit(
         &mut self,
-        bundle: &Bundle,
-        reception: a_sabr::types::TimeInterval,
-        sender: a_sabr::types::NodeID,
-        transmitions: &[(a_sabr::types::TimeInterval, a_sabr::types::NodeID)],
+        _bundle: &Bundle,
+        _reception: a_sabr::types::TimeInterval,
+        _sender: a_sabr::types::NodeID,
+        _transmitions: &[(a_sabr::types::TimeInterval, a_sabr::types::NodeID)],
     ) -> Result<(), ASABRError> {
         Ok(())
     }
@@ -110,24 +108,29 @@ parse_transparent!(NoRetOrNone, choice::Choice);
 /// Implements the DispatchParser to allow dynamic parsing.
 fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<(), ASABRError> {
     let bundle = Bundle {
-        source: 0,
-        destinations: vec![2],
+        source: 0.into(),
         priority: 0,
-        size: 0.0,
+        size: 0,
         expiration: 1000,
     };
-    let file = File::open(cp_path).unwrap();
-    let lines = BufReader::new(file).lines().map(|l| l.unwrap());
+    mk_graph!(graph,NM,EVLManager,cp_path,file);
 
-    let mut mpt_graph =
-        init_pathfinding::<NM, EVLManager, HybridParentingPath<NM, EVLManager, SABR>, _, _>(lines)?;
+    let mut finder = HybridParenting::<SABR,_,_>::new();
+    let source = graph.node_id_ref(0.into())?.real().ok_or(ASABRError::ContactPlanError("No Node 0"))?;
+    let mut destination = graph.node_id_ref(2.into())?;
+    let res = finder.find_path(&mut graph, 0, source, &bundle, &mut destination, None);
+    // let file = File::open(cp_path).unwrap();
+    // let lines = BufReader::new(file).lines().map(|l| l.unwrap());
+
+    // let mut mpt_graph =
+    //     init_pathfinding::<NM, EVLManager, HybridParentingPath<NM, EVLManager, SABR>, _, _>(lines)?;
 
     println!("\nRunning with contact plan location={cp_path}, and destination node=2 ");
 
-    let res = mpt_graph.get_next(0.0, 0, &bundle, &[]).unwrap();
+    
 
-    match res.by_destination[2].clone() {
-        Some(route) => println!("{}", route.borrow()),
+    match res {
+        Ok(Some(route)) => println!("{}", route.full_path_rev(destination, &graph).unwrap()),
         _ => println!("No route found to node 2."),
     }
 

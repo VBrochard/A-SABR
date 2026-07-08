@@ -36,20 +36,20 @@ fn edge_case_example(cp_path: &str, dest: NodeID) -> Result<(), ASABRError> {
         .find_path(&mut graph, 0, source, &bundle, &mut dest, None)?
         .ok_or(ASABRError::DryRunError("No path found in node parenting test"))?;
     print!("\nWith NodeParentingPath pathfinding. ");
-    println!("{:#?}", res.get_full_path(dest, &graph));
+    println!("{}", res.full_path_rev(dest, &graph).unwrap());
 
     let res = contact_finder
         .find_path(&mut graph, 0, source, &bundle, &mut dest, None)?
         .ok_or(ASABRError::DryRunError("No path found in contact parenting test"))?;
     
     print!("With ContactParentingPath pathfinding. ");
-    println!("{:?}", res.get_full_path(dest, &graph));
+    println!("{}", res.full_path_rev(dest, &graph).unwrap());
 
     let res = mpt_finder
         .find_path(&mut graph, 0, source, &bundle, &mut dest, None)?
         .ok_or(ASABRError::DryRunError("No path found in hybrid test"))?;
     print!("With HybridParentingPath pathfinding. ");
-    println!("{:?}", res.get_full_path(dest, &graph));
+    println!("{}", res.full_path_rev(dest, &graph).unwrap());
 
     Ok(())
 }
