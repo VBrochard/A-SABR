@@ -98,9 +98,7 @@ pub fn dijkstra<
                 if !work_area.node_check(NodeRef::R(neighbor), multigraph) {
                     continue;
                 }
-
-                let delay = current_time;
-                match previous_node {
+                let delay = match previous_node {
                     None => current_time,
                     Some(tx_node) => current_node.manager.delay(
                         bundle,
@@ -132,8 +130,7 @@ pub fn dijkstra<
 
             for (vnoderef, contacts) in iter_v {
                 if dest.is_useful(vnoderef) {
-                    let delay = current_time;
-                    match previous_node {
+                    let delay = match previous_node {
                         None => current_time,
                         Some(tx_node) => current_node.manager.delay(
                             bundle,

@@ -1,8 +1,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 use core::fmt::Debug;
-use core::hint::cold_path;
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 
 use crate::bundle::Bundle;
 use crate::contact::Contact;
@@ -38,7 +37,7 @@ mod test_helpers;
 /// * `CM` - A generic type that implements the `ContactManager` trait.
 #[derive(Debug)]
 pub struct PathFindingOutput<'id, 'a> {
-    path_tree: Either<&'a [Option<PathFragment<'id>>], Vec<Option<PathFragment<'id>>>>,
+    path_tree: Either<&'a mut [Option<PathFragment<'id>>], Vec<Option<PathFragment<'id>>>>,
 }
 
 impl<'id, 'a> AsRef<[Option<PathFragment<'id>>]> for PathFindingOutput<'id, 'a> {
@@ -57,6 +56,21 @@ impl<'id, 'a> Deref for PathFindingOutput<'id, 'a> {
     }
 }
 
+impl<'id, 'a> AsMut<[Option<PathFragment<'id>>]> for PathFindingOutput<'id, 'a> {
+    fn as_mut(&mut self) -> &mut [Option<PathFragment<'id>>] {
+        match &mut self.path_tree {
+            Either::Left(l) => *l,
+            Either::Right(r) => r.as_mut(),
+        }
+    }
+}
+
+impl<'id, 'a> DerefMut for PathFindingOutput<'id, 'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.as_mut()
+    }
+}
+
 impl<'id, 'a> From<Vec<Option<PathFragment<'id>>>> for PathFindingOutput<'id, 'a> {
     fn from(value: Vec<Option<PathFragment<'id>>>) -> Self {
         Self {
@@ -64,8 +78,8 @@ impl<'id, 'a> From<Vec<Option<PathFragment<'id>>>> for PathFindingOutput<'id, 'a
         }
     }
 }
-impl<'id, 'a> From<&'a [Option<PathFragment<'id>>]> for PathFindingOutput<'id, 'a> {
-    fn from(value: &'a [Option<PathFragment<'id>>]) -> Self {
+impl<'id, 'a> From<&'a mut [Option<PathFragment<'id>>]> for PathFindingOutput<'id, 'a> {
+    fn from(value: &'a mut [Option<PathFragment<'id>>]) -> Self {
         Self {
             path_tree: Either::Left(value),
         }
@@ -99,7 +113,7 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
             last: Some(graph.into_usize(destination)),
         })
     }
-    pub fn clone<'b>(self) -> PathFindingOutput<'id, 'b> {
+    pub fn into_owned<'b>(self) -> PathFindingOutput<'id, 'b> {
         let vec = self.as_vec();
         PathFindingOutput {
             path_tree: Either::Right(vec),
@@ -111,71 +125,77 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
             Either::Right(vec) => vec,
         }
     }
-    pub fn validate(
-        &self,
+    /// Intended for implementor of paths storage
+    /// from a mutable access to a stored vec representing a pathfinding output, get mutable access to each of the components of the path to a destination
+    ///
+    /// # Safety
+    /// self paths should have no cycle (wich is true of any reasonable PathfindingOutput not modified by hand outside of the library)
+    pub unsafe fn get_path_mut<'b>(
+        &'b mut self,
+        destination: usize,
+    ) -> Option<Vec<&'b mut PathFragment<'id>>> {
+        // multiple borrow occur but we assume there can be no cycle, and as such the different borrow are actually all on different cells.
+        let storage = &raw mut **self;
+        let next = unsafe { &mut (*storage)[destination] }.as_mut()?;
+        let mut collect = Vec::with_capacity(next.hop_count as usize + 1);
+        let mut next = collect.push_mut(next);
+        while let Some(ViaHop { parent_frag, .. }) = next.via {
+            next = collect.push_mut(unsafe { &mut (*storage)[parent_frag] }.as_mut()?)
+        }
+        collect.reverse();
+        Some(collect)
+    }
+
+    /// Check wether this is still a valid path for the given bundle/destination,
+    /// and update it to reflect the correct times
+    /// # Safety
+    /// self paths should have no cycle (wich is true of any reasonable PathfindingOutput not modified by hand outside of the library)
+    pub unsafe fn validate(
+        &mut self,
         dest: NodeRef<'id>,
         time: Date,
         bundle: &Bundle,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
-        let path = self.get_full_path(dest, graph);
-        path.is_some_and(|path| {
-            let mut last_time = TimeInterval {
-                start: time,
-                end: time,
-            };
-            if let Some(PathFragment { via: Some(via), .. }) = path.get(2) {
-                let ct = &graph[via.contact];
-                let Some(txdata) = ct.manager.dry_run_tx(ct.lifespan, time, bundle) else {
-                    return false;
+        let path = unsafe { self.get_path_mut(graph.into_usize(dest)) };
+        path.is_some_and(|mut path| {
+            let mut last_node = None;
+            if let Some(PathFragment { arrival_time, .. }) = path.first_mut() {
+                *arrival_time = TimeInterval {
+                    start: time,
+                    end: time,
                 };
-                last_time = txdata.rx_window
             }
-            for [fst, snd, third] in path.array_windows() {
-                if let Some(via) = snd.via {
-                    let node = &graph[snd.rx_node];
-                    let delay = node.manager.delay(
+            let mut idx = 0;
+            while let Ok([fst, snd]) = path.get_disjoint_mut([idx, idx + 1]) {
+                let time = match last_node {
+                    Some(nodeid) => graph[fst.rx_node].manager.delay(
                         bundle,
-                        last_time,
-                        fst.rx_node.into(),
-                        third.rx_node.into(),
-                    );
-
-                    let contact = &graph[via.contact];
-                    let Some(txdata) = contact.manager.dry_run_tx(contact.lifespan, delay, bundle)
-                    else {
-                        return false;
-                    };
-                    if !node.manager.dry_run_retention(
-                        bundle,
-                        last_time,
-                        fst.rx_node.into(),
-                        txdata.tx_window,
-                        third.rx_node.into(),
-                    ) {
-                        return false;
+                        fst.arrival_time,
+                        nodeid,
+                        snd.rx_node.into(),
+                    ),
+                    None => time,
+                };
+                let ct = snd.via.as_mut().unwrap();
+                let tx_data =
+                    graph[ct.contact]
+                        .manager
+                        .dry_run_tx(graph[ct.contact].lifespan, time, bundle);
+                match tx_data {
+                    None => return false,
+                    Some(tx_data) => {
+                        ct.tx_time = tx_data.tx_window;
+                        snd.arrival_time = tx_data.rx_window;
                     }
-                    last_time = txdata.rx_window
                 }
+                last_node = Some(fst.rx_node.into());
+                idx += 1
             }
-            if path.len() >= 2
-                && let [
-                    PathFragment { rx_node: prev, .. },
-                    PathFragment { rx_node, .. },
-                ] = path[path.len() - 2..]
-            {
-                graph[rx_node]
-                    .manager
-                    .dry_run_multi(bundle, last_time, prev.into(), &[])
-                    .is_some()
-            } else {
-                cold_path();
-                true
-            }
+            true
         })
     }
 }
-
 
 #[derive(Clone)]
 struct PathIterator<'id, 'a, 'b> {
@@ -267,11 +287,11 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
         }
         true
     });
-    let mut best: Option<(ContactRef<'id>, TimeInterval, RNodeRef<'id>)> = None;
+    let mut best: Option<(ContactRef<'id>, TimeInterval, RNodeRef<'id>, TimeInterval)> = None;
 
     for (next_node_ref, next_node_manager, ctref, ct) in suppressed {
         // not better
-        if let Some((_, time, _)) = best
+        if let Some((_, time, _, _)) = best
             && time.end <= ct.as_ref().lifespan.start
         {
             break;
@@ -282,7 +302,7 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
                 .manager
                 .dry_run_tx(ct.as_ref().lifespan, send_time, bundle)
         {
-            if let Some((_, time, _)) = best
+            if let Some((_, time, _, _)) = best
                 && time.end < txdata.rx_window.end
             {
                 continue;
@@ -303,14 +323,15 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
                 //Maybe replace that with the node returning a window of possible send time
                 break;
             }
-            best = Some((ctref, txdata.rx_window, next_node_ref))
+            best = Some((ctref, txdata.rx_window, next_node_ref, txdata.tx_window))
         }
     }
 
-    best.map(|(ct_ref, time, receiver)| PathFragment {
+    best.map(|(ct_ref, time, receiver, tx_window)| PathFragment {
         via: Some(ViaHop {
             contact: ct_ref,
             parent_frag: last_hop.1,
+            tx_time: tx_window,
         }),
         hop_count: last_hop.0.hop_count + 1,
         rx_node: receiver,

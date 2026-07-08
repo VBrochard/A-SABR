@@ -16,10 +16,13 @@ pub trait Destination<'id> {
     fn now_reached(&mut self, node: NodeRef<'id>) -> bool;
     /// Should paths to this vnode be considered ?
     fn is_useful(&self, node: VNodeRef<'id>) -> bool;
-    /// Wether this path tree is still valid to pass a bundle
-    fn validate(
+    /// Wether this path tree is still valid/usefull to pass a bundle
+    /// This will be the pathfinding output so you may as well update the path times while your at it
+    /// # Safety
+    /// self paths should have no cycle (wich is true of any reasonable PathfindingOutput not modified by hand outside of the library)
+    unsafe fn validate(
         &self,
-        paths: &PathFindingOutput<'id, '_>,
+        paths: &mut PathFindingOutput<'id, '_>,
         time: Date,
         bundle: &Bundle,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
@@ -80,24 +83,30 @@ impl<'id> Destination<'id> for Dest<'id> {
         }
     }
 
-    fn validate(
+    unsafe fn validate(
         &self,
-        paths: &PathFindingOutput<'id, '_>,
+        paths: &mut PathFindingOutput<'id, '_>,
         time: Date,
         bundle: &Bundle,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
-        match self {
-            Dest::RNode(rnode_ref) => paths.validate(NodeRef::R(*rnode_ref), time, bundle, graph),
-            Dest::VNode(vnode_ref) => paths.validate(NodeRef::V(*vnode_ref), time, bundle, graph),
-            Dest::AllNodes() => true,
-            Dest::AnyCast(rnode_refs) => rnode_refs
-                .iter()
-                .any(|dest| paths.validate(NodeRef::R(*dest), time, bundle, graph)),
-            Dest::MultiCast(rnode_refs, _items, _) => rnode_refs
-                .iter()
-                // This path is not technically fully valid, but hey, it is still interesting, so we want to extract it
-                .any(|dest| paths.validate(NodeRef::R(*dest), time, bundle, graph)),
+        unsafe {
+            match self {
+                Dest::RNode(rnode_ref) => {
+                    paths.validate(NodeRef::R(*rnode_ref), time, bundle, graph)
+                }
+                Dest::VNode(vnode_ref) => {
+                    paths.validate(NodeRef::V(*vnode_ref), time, bundle, graph)
+                }
+                Dest::AllNodes() => true,
+                Dest::AnyCast(rnode_refs) => rnode_refs
+                    .iter()
+                    .any(|dest| paths.validate(NodeRef::R(*dest), time, bundle, graph)),
+                Dest::MultiCast(rnode_refs, _items, _) => rnode_refs
+                    .iter()
+                    // This path is not technically fully valid, but hey, it is still interesting, so we want to extract it
+                    .any(|dest| paths.validate(NodeRef::R(*dest), time, bundle, graph)),
+            }
         }
     }
 
@@ -162,14 +171,14 @@ impl<'id> Destination<'id> for RNodeRef<'id> {
         false
     }
 
-    fn validate(
+    unsafe fn validate(
         &self,
-        paths: &PathFindingOutput<'id, '_>,
+        paths: &mut PathFindingOutput<'id, '_>,
         time: Date,
         bundle: &Bundle,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
-        paths.validate(NodeRef::R(*self), time, bundle, graph)
+        unsafe { paths.validate(NodeRef::R(*self), time, bundle, graph) }
     }
 
     fn into_id(
@@ -194,14 +203,14 @@ impl<'id> Destination<'id> for VNodeRef<'id> {
         node == *self
     }
 
-    fn validate(
+    unsafe fn validate(
         &self,
-        paths: &PathFindingOutput<'id, '_>,
+        paths: &mut PathFindingOutput<'id, '_>,
         time: Date,
         bundle: &Bundle,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
-        paths.validate(NodeRef::V(*self), time, bundle, graph)
+        unsafe { paths.validate(NodeRef::V(*self), time, bundle, graph) }
     }
 
     fn into_id(
@@ -228,14 +237,14 @@ impl<'id> Destination<'id> for NodeRef<'id> {
             NodeRef::V(vnode_ref) => vnode_ref.is_useful(node),
         }
     }
-    fn validate(
+    unsafe fn validate(
         &self,
-        paths: &PathFindingOutput<'id, '_>,
+        paths: &mut PathFindingOutput<'id, '_>,
         time: Date,
         bundle: &Bundle,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
-        paths.validate(*self, time, bundle, graph)
+        unsafe { paths.validate(*self, time, bundle, graph) }
     }
 
     fn into_id(
@@ -261,9 +270,9 @@ impl Destination<'_> for All {
     fn is_useful(&self, _node: VNodeRef<'_>) -> bool {
         true
     }
-    fn validate(
+    unsafe fn validate(
         &self,
-        _paths: &PathFindingOutput<'_, '_>,
+        _paths: &mut PathFindingOutput<'_, '_>,
         _time: Date,
         _bundle: &Bundle,
         _graph: &Multigraph<'_, impl NodeManager, impl ContactManager>,

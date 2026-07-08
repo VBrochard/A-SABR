@@ -12,6 +12,7 @@ pub struct ViaHop<'id> {
     pub contact: ContactRef<'id>,
     /// A reference to the parent route stage for this hop.
     pub parent_frag: usize,
+    pub tx_time: TimeInterval,
 }
 
 /// Represents the end of a path to a Node.

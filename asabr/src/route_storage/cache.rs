@@ -2,9 +2,15 @@ extern crate alloc;
 
 use core::marker::PhantomData;
 
+use ringbuffer::{AllocRingBuffer, RingBuffer};
+
 use crate::{
-    bundle::Bundle, contact_manager::ContactManager, errors::ASABRError, node_manager::NodeManager,
-    pathfinding::PathFindingOutput, types::Date,
+    bundle::Bundle,
+    contact_manager::ContactManager,
+    errors::ASABRError,
+    node_manager::NodeManager,
+    pathfinding::{PathFindingOutput, destination::Destination},
+    types::{Date, Priority},
 };
 
 use super::PathsStorage;
@@ -15,113 +21,50 @@ use super::PathsStorage;
 /// while enforcing limits on the number of entries based on size and priority checks.
 #[derive(Debug)]
 pub struct TreeCache<'id, NM: NodeManager, CM: ContactManager> {
+    cache: AllocRingBuffer<(Priority, PathFindingOutput<'id, 'id>)>,
     _phantom_nm: PhantomData<fn(&'id (), NM, CM)>,
 }
 impl<'id, NM: NodeManager, CM: ContactManager> TreeCache<'id, NM, CM> {
-    pub fn new(_multigrap: &crate::multigraph::Multigraph<'id, NM, CM>) -> Self {
+    //TODO: maybe infer it from multigraph ?
+    pub fn new(_multigrap: &crate::multigraph::Multigraph<'id, NM, CM>, capacity: usize) -> Self {
         Self {
+            cache: AllocRingBuffer::new(capacity),
             _phantom_nm: PhantomData,
         }
     }
 }
 
-impl<'id, NM: NodeManager, CM: ContactManager> PathsStorage<'id, NM, CM>
+impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage<'id, NM, CM, D>
     for TreeCache<'id, NM, CM>
 {
     fn select<'a>(
         &'a mut self,
-        _bundle: &Bundle,
-        _route_time: Date,
+        bundle: &Bundle,
+        destination: &D,
+        route_time: Date,
         _curr_time: Option<Date>,
-        _multigraph: &crate::multigraph::Multigraph<'id, NM, CM>,
+        multigraph: &crate::multigraph::Multigraph<'id, NM, CM>,
     ) -> Result<Option<PathFindingOutput<'id, 'a>>, ASABRError> {
+        for (prio,entry) in self.cache.iter_mut().rev() {
+            if bundle.priority == *prio {
+                if unsafe { destination.validate(entry, route_time, bundle, multigraph) } {
+                    return Ok(Some(PathFindingOutput::from(&mut**entry)));
+                }
+            }
+        }
         Ok(None)
     }
 
     fn store<'a>(
         &'a mut self,
-        _bundle: &Bundle,
-        tree: PathFindingOutput<'id, '_>,
+        tree: PathFindingOutput<'id, 'a>,
+        _destination: &D,
+        bundle: &Bundle,
+        _route_time: crate::types::Date,
+        _curr_time: Option<crate::types::Date>,
+        _multigraph: &crate::multigraph::Multigraph<'id, NM, CM>,
     ) -> PathFindingOutput<'id, 'a> {
-        tree.clone()
+        self.cache.enqueue((bundle.priority,tree.into_owned()));
+        PathFindingOutput::from(&mut *self.cache.back_mut().unwrap().1)
     }
-    // /// Loads a pathfinding output from the cache that matches the provided bundle and excluded nodes.
-    // ///
-    // /// # Parameters
-    // ///
-    // /// * `bundle` - A reference to the `Bundle` containing routing information.
-    // /// * `curr_time` - The current time.
-    // /// * `excluded_nodes_sorted` - A sorted vector of `NodeID`s representing nodes to exclude from pathfinding.
-    // ///
-    // /// # Returns
-    // ///
-    // /// * `(Option<Rc<RefCell<PathFindingOutput<NM, CM>>>>, Option<Vec<NodeID>>)` - An optional reference-counted and mutable reference
-    // ///   to the `PathFindingOutput` if a match is found; and the list of reached nodes if applicable (multicast).
-    // fn select(
-    //     &self,
-    //     bundle: &Bundle,
-    //     curr_time: Date,
-    //     excluded_nodes_sorted: &[NodeID],
-    // ) -> Result<
-    //     (
-    //         Option<Rc<RefCell<PathFindingOutput<NM, CM>>>>,
-    //         Option<Vec<NodeID>>,
-    //     ),
-    //     ASABRError,
-    // > {
-    //     let multicast = bundle.destinations.len() > 1;
-    //     for tree in &self.trees {
-    //         if tree
-    //             .borrow()
-    //             .bundle
-    //             .shadows(bundle, self.check_size, self.check_priority)
-    //         {
-    //             continue;
-    //         }
-    //         if tree.borrow().excluded_nodes_sorted != excluded_nodes_sorted {
-    //             continue;
-    //         }
-    //         match multicast {
-    //             false => {
-    //                 if let Some(_res) =
-    //                     dry_run_unicast_tree(bundle, curr_time, tree.clone(), false)?
-    //                 {
-    //                     return Ok((Some(tree.clone()), None));
-    //                 }
-    //             }
-    //             true => {
-    //                 let reachable_nodes = dry_run_multicast(bundle, curr_time, tree.clone())?;
-    //                 return Ok((Some(tree.clone()), Some(reachable_nodes)));
-    //             }
-    //         }
-    //     }
-    //     Ok((None, None))
-    // }
-
-    // /// Stores a pathfinding output tree in the cache. Replaces a tree for a known exclusion list.
-    // ///
-    // /// If the cache exceeds its maximum entry limit, the oldest entry is removed.
-    // ///
-    // /// # Parameters
-    // ///
-    // /// * `new_tree` - A reference-counted mutable reference to the `PathfindingOutput` to store.
-    // fn store(&mut self, _bundle: &Bundle, new_tree: Rc<RefCell<PathFindingOutput<NM, CM>>>) {
-    //     let mut replace_index = None;
-    //     for (i, tree) in self.trees.iter().enumerate() {
-    //         if tree.borrow().excluded_nodes_sorted == new_tree.borrow().excluded_nodes_sorted {
-    //             replace_index = Some(i);
-    //             break;
-    //         }
-    //     }
-
-    //     if let Some(i) = replace_index {
-    //         self.trees[i] = new_tree;
-    //     } else {
-    //         self.trees.push_back(new_tree);
-    //     }
-
-    //     if self.trees.len() > self.max_entries {
-    //         self.trees.pop_front();
-    //     }
-    // }
 }

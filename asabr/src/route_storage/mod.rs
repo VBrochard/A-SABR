@@ -1,7 +1,7 @@
 extern crate alloc;
 use core::marker::PhantomData;
 
-use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::collections::BTreeMap;
 
 pub mod cache;
 pub mod table;
@@ -13,7 +13,6 @@ use crate::{
     multigraph::Multigraph,
     node_manager::NodeManager,
     pathfinding::{PathFindingOutput, Pathfinding, destination::Destination},
-    paths::{PathFragment, ViaHop},
     types::{Date, Volume},
 };
 
@@ -22,7 +21,7 @@ use crate::{
 /// This trait defines methods for loading and storing pathfinding output
 /// related to routes in a routing system. Implementers of this trait must
 /// provide their own logic for handling route data.
-pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager> {
+pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager, D:Destination<'id>> {
     /// Loads the pathfinding output for a specific bundle, considering excluded nodes.
     ///
     /// # Parameters
@@ -38,6 +37,7 @@ pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager> {
     fn select<'a>(
         &'a mut self,
         bundle: &Bundle,
+        destination: &D,
         route_time: Date,
         curr_time: Option<Date>,
         multigraph: &Multigraph<'id, NM, CM>,
@@ -50,17 +50,22 @@ pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager> {
     /// * `tree` - A reference-counted mutable reference to the `PathfindingOutput` to store.
     fn store<'a>(
         &'a mut self,
+        tree: PathFindingOutput<'id, 'a>,
+        destination: &D,
         bundle: &Bundle,
-        tree: PathFindingOutput<'id, '_>,
+        _route_time: crate::types::Date,
+        _curr_time: Option<crate::types::Date>,
+        multigraph: &Multigraph<'id, NM, CM>
     ) -> PathFindingOutput<'id, 'a>;
 }
 
 pub struct NoStorage;
 
-impl<'id, NM: NodeManager, CM: ContactManager> PathsStorage<'id, NM, CM> for NoStorage {
+impl<'id, NM: NodeManager, CM: ContactManager, D:Destination<'id>> PathsStorage<'id, NM, CM,D> for NoStorage {
     fn select<'a>(
         &'a mut self,
         _bundle: &Bundle,
+        _destination: &D,
         _route_time: Date,
         _curr_time: Option<Date>,
         _multigraph: &Multigraph<'id, NM, CM>,
@@ -69,16 +74,20 @@ impl<'id, NM: NodeManager, CM: ContactManager> PathsStorage<'id, NM, CM> for NoS
     }
     fn store<'a>(
         &'a mut self,
+        tree: PathFindingOutput<'id, 'a>,
+        _destination: &D,
         _bundle: &Bundle,
-        tree: PathFindingOutput<'id, '_>,
+        _route_time: crate::types::Date,
+        _curr_time: Option<crate::types::Date>,
+        _multigraph: &Multigraph<'id, NM, CM>
     ) -> PathFindingOutput<'id, 'a> {
-        tree.clone()
+        tree.into_owned()
     }
 }
 
 pub struct Cached<
     'id,
-    S: PathsStorage<'id, NM, CM>,
+    S: PathsStorage<'id, NM, CM,D>,
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
@@ -91,7 +100,7 @@ pub struct Cached<
 
 impl<
     'id,
-    S: PathsStorage<'id, NM, CM>,
+    S: PathsStorage<'id, NM, CM,D>,
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
@@ -111,6 +120,7 @@ impl<
         let copy = &raw mut self.cache;
         match unsafe { copy.as_mut_unchecked() }.select(
             bundle,
+            destination,
             routing_time,
             prune_time,
             multigraph,
@@ -127,7 +137,7 @@ impl<
                 ) {
                     res @ (Ok(None) | Err(_)) => res,
                     Ok(Some(path)) => {
-                        Ok(Some(unsafe { copy.as_mut_unchecked() }.store(bundle, path)))
+                        Ok(Some(unsafe { copy.as_mut_unchecked() }.store(path,destination,bundle,routing_time,prune_time,multigraph)))
                     }
                 }
             }
@@ -137,7 +147,7 @@ impl<
 
 impl<
     'id,
-    S: PathsStorage<'id, NM, CM>,
+    S: PathsStorage<'id, NM, CM,D>,
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
@@ -268,23 +278,4 @@ impl<
     }
 }
 
-/// Intended for implementor of paths storage
-/// from a mutable access to a stored vec representing a pathfinding output, get mutable access to each of the components of the path to a destination
-///
-/// # Safety
-/// the "storage" vector should have no cycle (wich is true of any reasonable PathfindingOutput transformed into a vector)
-pub unsafe fn storage_get_path_mut<'id, 'a>(
-    storage: &'a mut [Option<PathFragment<'id>>],
-    destination: usize,
-) -> Option<Vec<&'a mut PathFragment<'id>>> {
-    // multiple borrow occur but we assume there can be no cycle, and as such the different borrow are actually all on different cells.
-    let storage = storage as *mut [Option<PathFragment<'id>>];
-    let next = unsafe { &mut (*storage)[destination] }.as_mut()?;
-    let mut collect = Vec::with_capacity(next.hop_count as usize + 1);
-    let mut next = collect.push_mut(next);
-    while let Some(ViaHop { parent_frag, .. }) = next.via {
-        next = collect.push_mut(unsafe { &mut (*storage)[parent_frag] }.as_mut()?)
-    }
-    collect.reverse();
-    Some(collect)
-}
+

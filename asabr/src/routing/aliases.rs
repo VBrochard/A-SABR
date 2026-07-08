@@ -3,7 +3,7 @@ extern crate alloc;
 #[allow(unused_imports)]
 use super::cgr::Cgr;
 use super::spsn::Spsn;
-#[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+#[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
 use crate::pathfinding::limiting_contact::had_less_volume_than;
 #[cfg(feature = "contact_suppression")]
 use crate::pathfinding::limiting_contact::{Suppressor, ends_earlier_than};
@@ -33,13 +33,13 @@ pub type SpsnContactParenting<'id, const PRIO_COUNT: usize, NM, CM, D> =
     Spsn<'id, PRIO_COUNT, NM, CM, ContactParenting<'id, NM, CM, SABR>, TreeCache<'id, NM, CM>, D>;
 
 pub type VolCgrHybridParenting<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, NM, CM, SABR>, HybridParenting<'id, SABR, NM, CM>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D>, HybridParenting<'id, SABR, NM, CM>, NM, CM, D>;
 
 pub type VolCgrNodeParenting<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, NM, CM, SABR>, NodeParenting<'id, SABR>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D>, NodeParenting<'id, SABR>, NM, CM, D>;
 
 pub type VolCgrContactParenting<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, NM, CM, SABR>, ContactParenting<'id, NM, CM, SABR>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D>, ContactParenting<'id, NM, CM, SABR>, NM, CM, D>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrSupressorHybridParenting<'id, NM, CM, D> = Cgr<
@@ -47,19 +47,13 @@ pub type CgrSupressorHybridParenting<'id, NM, CM, D> = Cgr<
     NM,
     CM,
     Suppressor<'id, HybridParenting<'id, SABR, NM, CM>, NM, CM>,
-    RoutingTable<'id, NM, CM, SABR>,
+    RoutingTable<'id, D>,
     D,
 >;
 
 #[cfg(feature = "contact_suppression")]
-pub type CgrSupressorNodeParenting<'id, NM, CM, D> = Cgr<
-    'id,
-    NM,
-    CM,
-    Suppressor<'id, NodeParenting<'id, SABR>, NM, CM>,
-    RoutingTable<'id, NM, CM, SABR>,
-    D,
->;
+pub type CgrSupressorNodeParenting<'id, NM, CM, D> =
+    Cgr<'id, NM, CM, Suppressor<'id, NodeParenting<'id, SABR>, NM, CM>, RoutingTable<'id, D>, D>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrSupressorContactParenting<'id, NM, CM, D> = Cgr<
@@ -67,7 +61,7 @@ pub type CgrSupressorContactParenting<'id, NM, CM, D> = Cgr<
     NM,
     CM,
     Suppressor<'id, ContactParenting<'id, NM, CM, SABR>, NM, CM>,
-    RoutingTable<'id, NM, CM, SABR>,
+    RoutingTable<'id, D>,
     D,
 >;
 
@@ -81,13 +75,13 @@ pub type SpsnContactParentingHop<'id, const PRIO_COUNT: usize, NM, CM, D> =
     Spsn<'id, PRIO_COUNT, NM, CM, ContactParenting<'id, NM, CM, Hop>, TreeCache<'id, NM, CM>, D>;
 
 pub type VolCgrHybridParentingHop<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, NM, CM, Hop>, HybridParenting<'id, Hop, NM, CM>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D>, HybridParenting<'id, Hop, NM, CM>, NM, CM, D>;
 
 pub type VolCgrNodeParentingHop<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, NM, CM, Hop>, NodeParenting<'id, Hop>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D>, NodeParenting<'id, Hop>, NM, CM, D>;
 
 pub type VolCgrContactParentingHop<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, NM, CM, Hop>, ContactParenting<'id, NM, CM, Hop>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D>, ContactParenting<'id, NM, CM, Hop>, NM, CM, D>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrSupressorHybridParentingHop<'id, NM, CM, D> = Cgr<
@@ -95,60 +89,24 @@ pub type CgrSupressorHybridParentingHop<'id, NM, CM, D> = Cgr<
     NM,
     CM,
     Suppressor<'id, HybridParenting<'id, Hop, NM, CM>, NM, CM>,
-    RoutingTable<'id, NM, CM, Hop>,
+    RoutingTable<'id, D>,
     D,
 >;
 
 #[cfg(feature = "contact_suppression")]
-pub type CgrSupressorNodeParentingHop<'id, NM, CM, D> = Cgr<
-    'id,
-    NM,
-    CM,
-    Suppressor<'id, NodeParenting<'id, Hop>, NM, CM>,
-    RoutingTable<'id, NM, CM, Hop>,
-    D,
->;
+pub type CgrSupressorNodeParentingHop<'id, NM, CM, D> =
+    Cgr<'id, NM, CM, Suppressor<'id, NodeParenting<'id, Hop>, NM, CM>, RoutingTable<'id, D>, D>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrSupressorContactParentingHop<'id, NM, CM, D> = Cgr<
     'id,
     NM,
     CM,
-    Suppressor<'id,ContactParenting<'id, NM, CM, Hop>, NM, CM, >,
-    RoutingTable<'id, NM, CM, Hop>,
+    Suppressor<'id, ContactParenting<'id, NM, CM, Hop>, NM, CM>,
+    RoutingTable<'id, D>,
     D,
 >;
 
-// macro_rules! register_cgr_router {
-//     ($router:ident, $router_name:literal, $test_name_variable:ident, $contact_plan:ident) => {
-//         if $test_name_variable == $router_name {
-//             let routing_table = Rc::new(RefCell::new(RoutingTable::new()));
-
-//             return Ok(Box::new($router::<NM, CM>::new(
-//                 $contact_plan,
-//                 routing_table,
-//             )?));
-//         }
-//     };
-// }
-
-// macro_rules! register_spsn_router {
-//     ($router:ident, $router_name:literal, $test_name_variable:ident, $contact_plan:ident, $check_size:ident, $check_priority:ident, $max_entries:ident) => {
-//         if $test_name_variable == $router_name {
-//             let cache = Rc::new(RefCell::new(TreeCache::new(
-//                 $check_size,
-//                 $check_priority,
-//                 $max_entries,
-//             )));
-
-//             return Ok(Box::new($router::<NM, CM>::new(
-//                 $contact_plan,
-//                 cache,
-//                 $check_priority,
-//             )?));
-//         }
-//     };
-// }
 #[derive(Clone)]
 pub struct SpsnOptions {
     pub check_size: bool,
@@ -173,26 +131,26 @@ pub unsafe fn build_generic_router<
     ),
     ASABRError,
 > {
-    let multigraph = unsafe { Multigraph::new_unguarded( contact_plan) }?;
+    let multigraph = unsafe { Multigraph::new_unguarded(contact_plan) }?;
     let router = match router_type {
         "SpsnNodeParenting" => Box::new(SpsnNodeParenting::<PRIO_COUNT, NM, CM, _>::new(
-            Cached::new(TreeCache::new(&multigraph), NodeParenting::new()),
+            Cached::new(TreeCache::new(&multigraph, 10), NodeParenting::new()),
         )) as Box<dyn Pathfinding<'id, NM, CM, _> + 'id>,
         "SpsnNodeParentingHop" => Box::new(SpsnNodeParentingHop::<PRIO_COUNT, NM, CM, _>::new(
-            Cached::new(TreeCache::new(&multigraph), NodeParenting::new()),
+            Cached::new(TreeCache::new(&multigraph, 10), NodeParenting::new()),
         )),
         "SpsnHybridParenting" => Box::new(SpsnHybridParenting::<PRIO_COUNT, NM, CM, _>::new(
-            Cached::new(TreeCache::new(&multigraph), HybridParenting::new()),
+            Cached::new(TreeCache::new(&multigraph, 10), HybridParenting::new()),
         )),
         "SpsnHybridParentingHop" => Box::new(SpsnHybridParentingHop::<PRIO_COUNT, NM, CM, _>::new(
-            Cached::new(TreeCache::new(&multigraph), HybridParenting::new()),
+            Cached::new(TreeCache::new(&multigraph, 10), HybridParenting::new()),
         )),
         "SpsnContactParenting" => Box::new(SpsnContactParenting::<PRIO_COUNT, NM, CM, _>::new(
-            Cached::new(TreeCache::new(&multigraph), ContactParenting::new()),
+            Cached::new(TreeCache::new(&multigraph, 10), ContactParenting::new()),
         )),
         "SpsnContactParentingHop" => {
             Box::new(SpsnContactParentingHop::<PRIO_COUNT, NM, CM, _>::new(
-                Cached::new(TreeCache::new(&multigraph), ContactParenting::new()),
+                Cached::new(TreeCache::new(&multigraph, 10), ContactParenting::new()),
             ))
         }
         "VolCgrNodeParenting" => Box::new(VolCgrNodeParenting::new(
@@ -255,37 +213,37 @@ pub unsafe fn build_generic_router<
             RoutingTable::new(),
             &multigraph,
         )),
-        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
         "CgrFirstDepletedHybridParenting" => Box::new(CgrSupressorHybridParenting::new(
             Suppressor::new(HybridParenting::new(), had_less_volume_than, &multigraph),
             RoutingTable::new(),
             &multigraph,
         )),
-        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
         "CgrFirstDepletedHybridParentingHop" => Box::new(CgrSupressorHybridParentingHop::new(
             Suppressor::new(HybridParenting::new(), had_less_volume_than, &multigraph),
             RoutingTable::new(),
             &multigraph,
         )),
-        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
         "CgrFirstDepletedContactParenting" => Box::new(CgrSupressorContactParenting::new(
-            Suppressor::new(ContactParenting::new(),had_less_volume_than, &multigraph),
+            Suppressor::new(ContactParenting::new(), had_less_volume_than, &multigraph),
             RoutingTable::new(),
             &multigraph,
         )),
-        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
         "CgrFirstDepletedContactParentingHop" => Box::new(CgrSupressorContactParentingHop::new(
-            Suppressor::new(ContactParenting::new(),had_less_volume_than, &multigraph),
+            Suppressor::new(ContactParenting::new(), had_less_volume_than, &multigraph),
             RoutingTable::new(),
             &multigraph,
         )),
-        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
         "CgrFirstDepletedNodeParenting" => Box::new(CgrSupressorNodeParenting::new(
             Suppressor::new(NodeParenting::new(), had_less_volume_than, &multigraph),
             RoutingTable::new(),
             &multigraph,
         )),
-        #[cfg(all(feature = "contact_suppression",feature = "first_depleted"))]
+        #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
         "CgrFirstDepletedNodeParentingHop" => Box::new(CgrSupressorNodeParentingHop::new(
             Suppressor::new(NodeParenting::new(), had_less_volume_than, &multigraph),
             RoutingTable::new(),
