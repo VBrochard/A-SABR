@@ -40,7 +40,6 @@ impl<'id, D: Destination<'id>> RoutingTable<'id, D> {
     }
 }
 
-/// TODO: Reimplement an actual cache, this is just so it compile to finaly test this thing
 impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage<'id, NM, CM, D>
     for RoutingTable<'id, D>
 {
