@@ -79,7 +79,7 @@ impl ContactInfo {
 ///   node's operations.
 /// - `CM`: A type implementing the `ContactManager` trait, responsible for managing the
 ///   contact's operations.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Contact<CM: ContactManager> {
     /// This contact relevancy window
     pub lifespan: TimeInterval,

@@ -7,7 +7,7 @@ use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
     distance::Distance,
-    multigraph::{Multigraph, NodeRef},
+    multigraph::{Multigraph, RoutableNodeRef},
     node_manager::NodeManager,
     pathfinding::{
         PathFragment,
@@ -57,31 +57,31 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
     fn try_insert(
         &mut self,
         proposition: PathFragment<'id>,
-        node: NodeRef<'id>,
+        node: RoutableNodeRef<'id>,
         graph: &Multigraph<'id, NM, CM>,
         bundle: &Bundle,
     ) -> Option<usize> {
-        let dest = &mut self.paths[graph.into_usize(node)];
+        let dest = &mut self.paths[graph.routable_to_usize(node)];
         if dest
             .as_ref()
             .is_none_or(|old| D::cmp(&proposition, old, graph, bundle) == Ordering::Less)
         {
             *dest = Some(proposition);
-            Some(graph.into_usize(node))
+            Some(graph.routable_to_usize(node))
         } else {
             None
         }
     }
     #[inline(always)]
-    fn node_check(&mut self, node: NodeRef<'id>, graph: &Multigraph<'id, NM, CM>) -> bool {
-        !self.visited[graph.into_usize(node)]
+    fn node_check(&mut self, node: RoutableNodeRef<'id>, graph: &Multigraph<'id, NM, CM>) -> bool {
+        !self.visited[graph.routable_to_usize(node)]
     }
     fn poped_relevant_new(
         &mut self,
         frag: PathFragment<'id>,
-        _node: NodeRef<'id>,
+        _node: RoutableNodeRef<'id>,
         viaref: usize,
-    ) -> (bool, bool, Option<crate::multigraph::RNodeRef<'id>>) {
+    ) -> (bool, bool, Option<crate::multigraph::INodeRef<'id>>) {
         if self.visited[viaref] {
             (false, false, None)
         } else {
@@ -89,8 +89,13 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
             (
                 true,
                 true,
-                frag.via
-                    .map(|ViaHop { parent_frag, .. }| self.paths[parent_frag].unwrap().rx_node),
+                frag.via.map(|ViaHop { parent_frag, .. }| unsafe {
+                    self.paths[parent_frag]
+                        .unwrap()
+                        .rx_node
+                        .internal()
+                        .unwrap_unchecked()
+                }),
             )
         }
     }

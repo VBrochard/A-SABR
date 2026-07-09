@@ -10,7 +10,7 @@ use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
     errors::ASABRError,
-    multigraph::Multigraph,
+    multigraph::{INodeRef, Multigraph},
     node_manager::NodeManager,
     pathfinding::{PathFindingOutput, Pathfinding, destination::Destination},
     types::{Date, Volume},
@@ -21,7 +21,7 @@ use crate::{
 /// This trait defines methods for loading and storing pathfinding output
 /// related to routes in a routing system. Implementers of this trait must
 /// provide their own logic for handling route data.
-pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager, D:Destination<'id>> {
+pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> {
     /// Loads the pathfinding output for a specific bundle, considering excluded nodes.
     ///
     /// # Parameters
@@ -55,13 +55,15 @@ pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager, D:Destination<'
         bundle: &Bundle,
         _route_time: crate::types::Date,
         _curr_time: Option<crate::types::Date>,
-        multigraph: &Multigraph<'id, NM, CM>
+        multigraph: &Multigraph<'id, NM, CM>,
     ) -> PathFindingOutput<'id, 'a>;
 }
 
 pub struct NoStorage;
 
-impl<'id, NM: NodeManager, CM: ContactManager, D:Destination<'id>> PathsStorage<'id, NM, CM,D> for NoStorage {
+impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage<'id, NM, CM, D>
+    for NoStorage
+{
     fn select<'a>(
         &'a mut self,
         _bundle: &Bundle,
@@ -79,7 +81,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D:Destination<'id>> PathsStorage<
         _bundle: &Bundle,
         _route_time: crate::types::Date,
         _curr_time: Option<crate::types::Date>,
-        _multigraph: &Multigraph<'id, NM, CM>
+        _multigraph: &Multigraph<'id, NM, CM>,
     ) -> PathFindingOutput<'id, 'a> {
         tree.into_owned()
     }
@@ -87,7 +89,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D:Destination<'id>> PathsStorage<
 
 pub struct Cached<
     'id,
-    S: PathsStorage<'id, NM, CM,D>,
+    S: PathsStorage<'id, NM, CM, D>,
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
@@ -100,7 +102,7 @@ pub struct Cached<
 
 impl<
     'id,
-    S: PathsStorage<'id, NM, CM,D>,
+    S: PathsStorage<'id, NM, CM, D>,
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
@@ -111,7 +113,7 @@ impl<
         &'a mut self,
         multigraph: &mut Multigraph<'id, NM, CM>,
         routing_time: Date,
-        source: crate::multigraph::RNodeRef<'id>,
+        source: INodeRef<'id>,
         bundle: &Bundle,
         destination: &mut D,
         prune_time: Option<Date>,
@@ -136,9 +138,14 @@ impl<
                     prune_time,
                 ) {
                     res @ (Ok(None) | Err(_)) => res,
-                    Ok(Some(path)) => {
-                        Ok(Some(unsafe { copy.as_mut_unchecked() }.store(path,destination,bundle,routing_time,prune_time,multigraph)))
-                    }
+                    Ok(Some(path)) => Ok(Some(unsafe { copy.as_mut_unchecked() }.store(
+                        path,
+                        destination,
+                        bundle,
+                        routing_time,
+                        prune_time,
+                        multigraph,
+                    ))),
                 }
             }
         }
@@ -147,7 +154,7 @@ impl<
 
 impl<
     'id,
-    S: PathsStorage<'id, NM, CM,D>,
+    S: PathsStorage<'id, NM, CM, D>,
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
@@ -183,7 +190,7 @@ impl<'id, const PRIO_COUNT: usize, D: Destination<'id>> Guard<'id, D, PRIO_COUNT
         dest: &D,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) {
-        let Some(id) = dest.into_id(graph) else {
+        let Some(id) = dest.to_id(graph) else {
             return;
         };
         let place = self.limits.entry(id).or_insert([None; PRIO_COUNT]);
@@ -197,7 +204,7 @@ impl<'id, const PRIO_COUNT: usize, D: Destination<'id>> Guard<'id, D, PRIO_COUNT
         dest: &D,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
-        let Some(id) = dest.into_id(graph) else {
+        let Some(id) = dest.to_id(graph) else {
             return false;
         };
         match &self.limits.get(&id) {
@@ -252,7 +259,7 @@ impl<
         &'a mut self,
         multigraph: &mut Multigraph<'id, NM, CM>,
         routing_time: Date,
-        source: crate::multigraph::RNodeRef<'id>,
+        source: INodeRef<'id>,
         bundle: &Bundle,
         destination: &mut D,
         prune_time: Option<Date>,
@@ -277,5 +284,3 @@ impl<
         }
     }
 }
-
-

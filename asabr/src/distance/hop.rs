@@ -1,12 +1,8 @@
 use core::cmp::Ordering;
 
 use crate::{
-    bundle::Bundle,
-    contact_manager::ContactManager,
-    multigraph::{Multigraph, RNodeRef},
-    node_manager::NodeManager,
-    pathfinding::HybridParentingOrd,
-    paths::PathFragment,
+    bundle::Bundle, contact_manager::ContactManager, multigraph::Multigraph,
+    node_manager::NodeManager, pathfinding::HybridParentingOrd, paths::PathFragment,
 };
 
 use super::Distance;
@@ -61,7 +57,6 @@ impl<NM: NodeManager, CM: ContactManager> HybridParentingOrd<NM, CM> for Hop {
         second: &PathFragment<'id>,
         _graph: &Multigraph<'id, NM, CM>,
         _bundle: &Bundle,
-        _actual_node: RNodeRef<'id>,
     ) -> bool {
         matches!(
             (

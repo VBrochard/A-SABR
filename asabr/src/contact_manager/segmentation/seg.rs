@@ -18,7 +18,7 @@ use alloc::{vec, vec::Vec};
 ///
 /// The `SegmentationManager` uses different segments to manage free intervals, rate intervals, and delay intervals,
 /// which are applied in contact scheduling and transmission simulation.
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct SegmentationManager {
     /// A list of segments representing free intervals available for transmission.
     free_intervals: Vec<Segment<()>>,
@@ -116,7 +116,6 @@ impl ContactManager for SegmentationManager {
                     start: tx_start,
                     end: tx_end,
                 },
-                expiration: free_seg.end,
                 rx_window: TimeInterval {
                     start: tx_start + d_start,
                     end: tx_end + d_end,
@@ -186,7 +185,6 @@ impl ContactManager for SegmentationManager {
                 start: tx_start,
                 end: tx_end,
             },
-            expiration,
             rx_window: TimeInterval {
                 start: tx_start + d_start,
                 end: tx_end + d_end,
@@ -316,10 +314,6 @@ mod tests {
                     assert_eq!(
                         dry.tx_window, sched.tx_window,
                         "TEST N°{i} FAILED: tx_window mismatch."
-                    );
-                    assert_eq!(
-                        dry.expiration, sched.expiration,
-                        "TEST N°{i} FAILED: expiration mismatch."
                     );
                     assert_eq!(
                         dry.rx_window, sched.rx_window,

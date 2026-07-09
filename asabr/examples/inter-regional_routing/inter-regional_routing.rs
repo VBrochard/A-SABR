@@ -39,7 +39,7 @@ fn main() -> Result<(), ASABRError> {
     println!("\n---\n");
 
     // We create a storage for the paths and initialize SPSN with the current pathfinding API.
-    let table = TreeCache::new(&graph,10);
+    let table = TreeCache::new(&graph, 10);
     let mut spsn = SpsnHybridParenting::<1, NoManagement, CMDynStandard, _>::new(Cached::new(
         table,
         HybridParenting::new(),
@@ -53,10 +53,10 @@ fn main() -> Result<(), ASABRError> {
         expiration: 10000,
     };
 
-    let Ok(NodeRef::R(source)) = graph.node_id_ref(0.into()) else {
+    let Ok(NodeRef::I(source)) = graph.node_id_ref(0.into()) else {
         panic!("Expected RNodeRef for source node 0")
     };
-    let mut destination = graph.node_id_ref(8.into())?;
+    let mut destination = graph.node_id_ref(8.into())?.routable().unwrap();
 
     // We schedule the bundle (resource updates were conducted).
     let out = spsn.find_path(&mut graph, 0, source, &bundle, &mut destination, None)?;

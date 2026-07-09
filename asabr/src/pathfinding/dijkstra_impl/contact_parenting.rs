@@ -10,7 +10,7 @@ use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
     distance::Distance,
-    multigraph::{ContactRef, Multigraph, NodeRef, RNodeRef},
+    multigraph::{ContactRef, INodeRef, Multigraph, RoutableNodeRef},
     node_manager::NodeManager,
     pathfinding::{
         dijkstra::{DijkstraWorkspace, Disktra},
@@ -51,7 +51,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
     fn new(graph: &Multigraph<'id, NM, CM>) -> Self {
         Self {
             possible_paths: Vec::new(),
-            by_destination: vec![None; graph.get_rnode_count()],
+            by_destination: vec![None; graph.get_internal_count()],
             by_dest_vnode: vec![None; graph.get_vnode_count()],
             visited: vec![BTreeMap::new(); graph.get_nonvirtualnode_count()],
             _phantom: PhantomData,
@@ -67,7 +67,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
     fn try_insert(
         &mut self,
         proposition: PathFragment<'id>,
-        node: NodeRef<'id>,
+        node: RoutableNodeRef<'id>,
         graph: &Multigraph<'id, NM, CM>,
         bundle: &Bundle,
     ) -> Option<usize> {
@@ -81,7 +81,9 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
                 result = new_idx;
             }
             Some(ViaHop { contact, .. }) => {
-                match self.visited[usize::from(proposition.rx_node)].entry(contact) {
+                match self.visited[usize::from(graph.into_nodeid(proposition.rx_node.into()))]
+                    .entry(contact)
+                {
                     Entry::Vacant(vacant_entry) => {
                         vacant_entry.insert(new_idx);
                         self.possible_paths.push(proposition);
@@ -102,8 +104,8 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
             }
         }
         let for_node = match node {
-            NodeRef::R(rnode) => &mut self.by_destination[usize::from(rnode)],
-            NodeRef::V(vnode) => &mut self.by_dest_vnode[usize::from(vnode)],
+            RoutableNodeRef::I(inode) => &mut self.by_destination[usize::from(inode)],
+            RoutableNodeRef::V(vnode) => &mut self.by_dest_vnode[usize::from(vnode)],
         };
         match for_node {
             Some(for_node) => {
@@ -120,26 +122,33 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
         Some(result)
     }
 
-    fn node_check(&mut self, _node: NodeRef<'id>, _graph: &Multigraph<'id, NM, CM>) -> bool {
+    fn node_check(
+        &mut self,
+        _node: RoutableNodeRef<'id>,
+        _graph: &Multigraph<'id, NM, CM>,
+    ) -> bool {
         true
     }
     fn poped_relevant_new(
         &mut self,
         frag: PathFragment<'id>,
-        node: NodeRef<'id>,
+        node: RoutableNodeRef<'id>,
         viaref: usize,
-    ) -> (bool, bool, Option<RNodeRef<'id>>) {
+    ) -> (bool, bool, Option<INodeRef<'id>>) {
         if self.possible_paths[viaref] == frag {
-            let prev = frag
-                .via
-                .map(|ViaHop { parent_frag, .. }| self.possible_paths[parent_frag].rx_node);
+            let prev = frag.via.map(|ViaHop { parent_frag, .. }| unsafe {
+                self.possible_paths[parent_frag]
+                    .rx_node
+                    .internal()
+                    .unwrap_unchecked()
+            });
             match node {
-                NodeRef::R(rnode) => (
+                RoutableNodeRef::I(inode) => (
                     true,
-                    self.by_destination[usize::from(rnode)] == Some(viaref),
+                    self.by_destination[usize::from(inode)] == Some(viaref),
                     prev,
                 ),
-                NodeRef::V(vnode) => (
+                RoutableNodeRef::V(vnode) => (
                     true,
                     self.by_dest_vnode[usize::from(vnode)] == Some(viaref),
                     prev,

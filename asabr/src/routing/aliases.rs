@@ -12,7 +12,7 @@ use crate::{
     contact_plan::ContactPlan,
     distance::{hop::Hop, sabr::SABR},
     errors::ASABRError,
-    multigraph::{Multigraph, NodeRef},
+    multigraph::{Multigraph, RoutableNodeRef},
     node_manager::NodeManager,
     pathfinding::{
         Pathfinding,
@@ -116,6 +116,9 @@ pub struct SpsnOptions {
 
 /// Intended for tests / benchmarking where you deal with a bunch of router types, not production code
 /// Initialise the correct router directly where possible
+/// # Safety
+/// unsafe because it return a unguarded graph. see `Multigraph::new_unguarded` for more information
+#[allow(clippy::type_complexity)]
 pub unsafe fn build_generic_router<
     'id,
     const PRIO_COUNT: usize,
@@ -127,7 +130,7 @@ pub unsafe fn build_generic_router<
 ) -> Result<
     (
         Multigraph<'id, NM, CM>,
-        Box<dyn Pathfinding<'id, NM, CM, NodeRef<'id>> + 'id>,
+        Box<dyn Pathfinding<'id, NM, CM, RoutableNodeRef<'id>> + 'id>,
     ),
     ASABRError,
 > {

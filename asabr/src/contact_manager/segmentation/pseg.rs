@@ -20,7 +20,7 @@ use alloc::vec::Vec;
 
 /// Priority-aware segmentation manager. Tracks bandwidth availability per priority level
 /// using booking intervals.
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct PSegmentationManager {
     /// A list of segments tracking the priority level booked for each time interval.
     booking: Vec<Segment<Priority>>,
@@ -104,7 +104,6 @@ impl ContactManager for PSegmentationManager {
                                 start: tx_start,
                                 end: tx_end,
                             },
-                            expiration: seg.end,
                             rx_window: TimeInterval {
                                 start: tx_start + d_start,
                                 end: tx_end + d_end,
@@ -131,7 +130,6 @@ impl ContactManager for PSegmentationManager {
                                     start: tx_start,
                                     end: tx_end,
                                 },
-                                expiration: seg.end,
                                 rx_window: TimeInterval {
                                     start: tx_start + d_start,
                                     end: tx_end + d_end,

@@ -13,7 +13,7 @@ pub mod qd;
 #[cfg(test)]
 pub(crate) mod test_helpers;
 
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 /// A generic legacy volume manager. ETO, PB, ... are newtype on specialisation of this one
 struct VolumeManager<const PRIO_COUNT: usize, const BUDGETED: bool> {
     rate: DataRate,
@@ -215,7 +215,6 @@ impl<const ADD_DELAY: bool, const AUTO_UPDATE: bool, const PRIO_COUNT: usize, co
                 start: tx_start,
                 end: tx_end,
             },
-            expiration: contact_lifespan.end,
             rx_window: TimeInterval {
                 start: tx_start + self.0.delay,
                 end: tx_end + self.0.delay,

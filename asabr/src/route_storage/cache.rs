@@ -45,11 +45,11 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage
         _curr_time: Option<Date>,
         multigraph: &crate::multigraph::Multigraph<'id, NM, CM>,
     ) -> Result<Option<PathFindingOutput<'id, 'a>>, ASABRError> {
-        for (prio,entry) in self.cache.iter_mut().rev() {
-            if bundle.priority == *prio {
-                if unsafe { destination.validate(entry, route_time, bundle, multigraph) } {
-                    return Ok(Some(PathFindingOutput::from(&mut**entry)));
-                }
+        for (prio, entry) in self.cache.iter_mut().rev() {
+            if bundle.priority == *prio
+                && unsafe { destination.validate(entry, route_time, bundle, multigraph) }
+            {
+                return Ok(Some(PathFindingOutput::from(&mut **entry)));
             }
         }
         Ok(None)
@@ -64,7 +64,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage
         _curr_time: Option<crate::types::Date>,
         _multigraph: &crate::multigraph::Multigraph<'id, NM, CM>,
     ) -> PathFindingOutput<'id, 'a> {
-        self.cache.enqueue((bundle.priority,tree.into_owned()));
+        self.cache.enqueue((bundle.priority, tree.into_owned()));
         PathFindingOutput::from(&mut *self.cache.back_mut().unwrap().1)
     }
 }

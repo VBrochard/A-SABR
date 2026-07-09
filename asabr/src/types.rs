@@ -31,7 +31,7 @@ pub type DataRate = i64;
 /// Represents the count of hops in a routing path.
 pub type HopCount = u16;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TimeInterval {
     pub start: Date,
     pub end: Date,
@@ -156,6 +156,6 @@ impl Display for NodeID {
 
 impl core::fmt::Debug for NodeID {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        core::fmt::Debug::fmt(&self.0,f)
+        core::fmt::Debug::fmt(&self.0, f)
     }
 }

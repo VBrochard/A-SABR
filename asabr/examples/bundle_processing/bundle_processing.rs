@@ -104,7 +104,6 @@ use a_sabr::errors::ASABRError;
 // }
 // parse_transparent!(CompressingOrNone, choice::Choice);
 
-
 fn main() -> Result<(), ASABRError> {
     Ok(())
 }
