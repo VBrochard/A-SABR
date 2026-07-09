@@ -3,8 +3,8 @@ extern crate alloc;
 use crate::{
     bundle::Bundle,
     contact::{Contact, ContactInfo},
-    contact_manager::{legacy::evl::EVLManager},
-    contact_plan::{RealNode},
+    contact_manager::legacy::evl::EVLManager,
+    contact_plan::RealNode,
     node::{Node, NodeInfo},
     node_manager::NodeManager,
     pathfinding::ASABRError,

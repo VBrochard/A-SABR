@@ -425,6 +425,43 @@ impl<'id, NM: NodeManager, CM: ContactManager> Multigraph<'id, NM, CM> {
         // TODO: Fill the vnode iterator
         (node, neighboor_reals, neighboor_virt)
     }
+
+    ///for a given inode pair, iter on contacts between the two
+    pub fn iter_contacts(
+        &self,
+        tx: INodeRef<'id>,
+        rx: INodeRef<'id>,
+    ) -> impl Iterator<Item = (ContactRef<'id>, &Contact<CM>)> {
+        let id = self.id;
+        let arr = &self.internal_nodes[usize::from(tx)].1.reals;
+        match arr.binary_search_by_key(&rx, |elt| elt.0) {
+            Ok(index) => Either::Left(
+                arr[index]
+                    .1
+                    .clone()
+                    .map(move |index| (ContactRef { index, id }, &self.contacts[index])),
+            ),
+            Err(_) => Either::Right(iter::empty()),
+        }
+    }
+    pub fn iter_contacts_mut(
+        &mut self,
+        tx: INodeRef<'id>,
+        rx: INodeRef<'id>,
+    ) -> impl Iterator<Item = (ContactRef<'id>, &mut Contact<CM>)> {
+        let arr = &self.internal_nodes[usize::from(tx)].1.reals;
+        match arr.binary_search_by_key(&rx, |elt| elt.0) {
+            Ok(index) => Either::Left({
+                let id = self.id;
+                let range = arr[index].1.clone();
+                range
+                    .clone()
+                    .map(move |index| ContactRef { index, id })
+                    .zip(self.contacts[range].iter_mut())
+            }),
+            Err(_) => Either::Right(iter::empty()),
+        }
+    }
 }
 
 macro_rules! graph_index {

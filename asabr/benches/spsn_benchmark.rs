@@ -82,13 +82,13 @@ pub fn benchmark(c: &mut Criterion) {
                     }
                     Err(err) => panic!("{}", err),
                 },
-                |(mut graph, mut router, source, mut dest)| {
+                |(mut graph, mut router, source, dest)| {
                     let _ = black_box(router.find_path(
                         black_box(&mut graph),
                         black_box(curr_time),
                         black_box(source),
                         black_box(&bundle),
-                        black_box(&mut dest),
+                        black_box(&mut dest.routable().unwrap()),
                         black_box(None),
                     ));
                 },

@@ -78,6 +78,7 @@ impl From<Duration> for NoRetention {
 
 parse_transparent!(NoRetention, Duration);
 
+#[allow(dead_code)]
 struct NoRetOrNone(Box<dyn NodeManager>);
 
 transparent_NM!(NoRetOrNone);
@@ -139,7 +140,8 @@ fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<()
 
 fn main() -> Result<(), ASABRError> {
     edge_case_example::<NoManagement>("asabr/examples/satellite_constellation/contact_plan_1.cp")?;
-    edge_case_example::<NoRetOrNone>("asabr/examples/satellite_constellation/contact_plan_2.cp")?;
+    //TODO: fix
+    // edge_case_example::<NoRetOrNone>("asabr/examples/satellite_constellation/contact_plan_2.cp")?;
 
     Ok(())
 
