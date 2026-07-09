@@ -7,7 +7,7 @@ use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
     distance::{Distance, prio_queue::PrioQueue},
-    multigraph::{Multigraph, NodeRef, RNodeRef},
+    multigraph::{INodeRef, Multigraph, RoutableNodeRef},
     node_manager::NodeManager,
     pathfinding::{PathFindingOutput, Pathfinding, destination::Destination, try_make_hop},
     paths::PathFragment,
@@ -26,20 +26,20 @@ pub trait DijkstraWorkspace<'id, NM: NodeManager, CM: ContactManager> {
     fn try_insert(
         &mut self,
         proposition: PathFragment<'id>,
-        node: NodeRef<'id>,
+        node: RoutableNodeRef<'id>,
         graph: &Multigraph<'id, NM, CM>,
         bundle: &Bundle,
     ) -> Option<usize>;
     /// Check if it is usefull to consider new paths to this node.
-    fn node_check(&mut self, node: NodeRef<'id>, graph: &Multigraph<'id, NM, CM>) -> bool;
+    fn node_check(&mut self, node: RoutableNodeRef<'id>, graph: &Multigraph<'id, NM, CM>) -> bool;
     /// Is this path still relevant, and is it to a new node ?
     /// Also, return the previous node on path if it exist
     fn poped_relevant_new(
         &mut self,
         frag: PathFragment<'id>,
-        node: NodeRef<'id>,
+        node: RoutableNodeRef<'id>,
         viaref: usize,
-    ) -> (bool, bool, Option<RNodeRef<'id>>);
+    ) -> (bool, bool, Option<INodeRef<'id>>);
 }
 
 pub fn dijkstra<
@@ -53,24 +53,24 @@ pub fn dijkstra<
 >(
     multigraph: &mut Multigraph<'id, NM, CM>,
     current_time: Date,
-    source: RNodeRef<'id>,
+    source: INodeRef<'id>,
     bundle: &Bundle,
     dest: &mut De,
     prune_time: Option<Date>,
 ) -> Option<PathFindingOutput<'id, 'a>> {
     let mut work_area = W::new(multigraph);
 
-    let mut prioqueue = PrioQueue::<'_, D, NM, CM, _>::with_capacity(multigraph.get_rnode_count());
+    let mut prioqueue = PrioQueue::<'_, D, NM, CM, _>::with_capacity(multigraph.get_vertex_count());
 
     let mut reachable: usize = 1;
     let mut reached: usize = 0;
 
-    let mut reachables = vec![false; multigraph.get_rnode_count()];
+    let mut reachables = vec![false; multigraph.get_internal_count()];
     let mut reachables_v = vec![false; multigraph.get_vnode_count()];
     reachables[usize::from(source)] = true;
 
-    let init_path = PathFragment::new_start(current_time, source);
-    let viaref = work_area.try_insert(init_path, NodeRef::R(source), multigraph, bundle)?;
+    let init_path = PathFragment::new_start(current_time, source.into());
+    let viaref = work_area.try_insert(init_path, RoutableNodeRef::I(source), multigraph, bundle)?;
 
     prioqueue.insert((init_path, (viaref, None)), multigraph, bundle);
 
@@ -78,8 +78,8 @@ pub fn dijkstra<
         && let Some((path, (viaref, isvnode))) = prioqueue.pop_min(multigraph, bundle)
     {
         let node = match isvnode {
-            Some(vnoderef) => NodeRef::V(vnoderef),
-            None => NodeRef::R(path.rx_node),
+            Some(vnoderef) => RoutableNodeRef::V(vnoderef),
+            None => RoutableNodeRef::I(unsafe { path.rx_node.internal().unwrap_unchecked() }),
         };
         let (relevant, new, previous_node) = work_area.poped_relevant_new(path, node, viaref);
 
@@ -91,11 +91,11 @@ pub fn dijkstra<
         }
 
         if isvnode.is_none() && relevant {
-            let node = path.rx_node;
+            let node = unsafe { path.rx_node.internal().unwrap_unchecked() };
             let (current_node, iter_r, iter_v) = multigraph.iter_iter_contacts(node, prune_time);
 
             for (neighbor, _, contacts) in iter_r {
-                if !work_area.node_check(NodeRef::R(neighbor), multigraph) {
+                if !work_area.node_check(RoutableNodeRef::I(neighbor), multigraph) {
                     continue;
                 }
                 if let Some(path) = try_make_hop(
@@ -103,7 +103,7 @@ pub fn dijkstra<
                     (&path, viaref),
                     bundle,
                     node,
-                    contacts.map(|(ctref, ct)| (neighbor, &current_node.manager, ctref, ct)),
+                    contacts.map(|(ctref, ct)| (neighbor.into(), &current_node.manager, ctref, ct)),
                     previous_node,
                     neighbor.into(),
                 ) {
@@ -112,7 +112,7 @@ pub fn dijkstra<
                         reachables[usize::from(neighbor)] = true
                     }
                     if let Some(viaref) =
-                        work_area.try_insert(path, NodeRef::R(neighbor), multigraph, bundle)
+                        work_area.try_insert(path, RoutableNodeRef::I(neighbor), multigraph, bundle)
                     {
                         prioqueue.insert((path, (viaref, None)), multigraph, bundle);
                     }
@@ -120,8 +120,8 @@ pub fn dijkstra<
             }
 
             for (vnoderef, contacts) in iter_v {
-                if dest.is_useful(vnoderef) {
-                    if let Some(path) = try_make_hop(
+                if dest.is_useful(vnoderef)
+                    && let Some(path) = try_make_hop(
                         multigraph,
                         (&path, viaref),
                         bundle,
@@ -129,16 +129,16 @@ pub fn dijkstra<
                         contacts.map(|(rre, rno, ctre, ct)| (rre, &rno.manager, ctre, ct)),
                         previous_node,
                         multigraph.vnode_id(vnoderef),
-                    ) {
-                        if !reachables_v[usize::from(vnoderef)] {
-                            reachable += 1;
-                            reachables_v[usize::from(vnoderef)] = true
-                        }
-                        if let Some(viaref) =
-                            work_area.try_insert(path, NodeRef::V(vnoderef), multigraph, bundle)
-                        {
-                            prioqueue.insert((path, (viaref, Some(vnoderef))), multigraph, bundle);
-                        }
+                    )
+                {
+                    if !reachables_v[usize::from(vnoderef)] {
+                        reachable += 1;
+                        reachables_v[usize::from(vnoderef)] = true
+                    }
+                    if let Some(viaref) =
+                        work_area.try_insert(path, RoutableNodeRef::V(vnoderef), multigraph, bundle)
+                    {
+                        prioqueue.insert((path, (viaref, Some(vnoderef))), multigraph, bundle);
                     }
                 }
             }
@@ -163,7 +163,7 @@ where
         &'a mut self,
         multigraph: &mut Multigraph<'id, NM, CM>,
         current_time: Date,
-        source: RNodeRef<'id>,
+        source: INodeRef<'id>,
         bundle: &Bundle,
         dest: &mut De,
         prune_time: Option<Date>,

@@ -54,7 +54,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage
         _curr_time: Option<crate::types::Date>,
         multigraph: &Multigraph<'id, NM, CM>,
     ) -> Result<Option<crate::pathfinding::PathFindingOutput<'id, 'a>>, ASABRError> {
-        match destination.into_id(multigraph) {
+        match destination.to_id(multigraph) {
             None => Ok(None),
             Some(id) => match self.cache.get_mut(&(id, bundle.priority)) {
                 None => Ok(None),
@@ -78,7 +78,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage
         _curr_time: Option<crate::types::Date>,
         multigrap: &Multigraph<'id, NM, CM>,
     ) -> crate::pathfinding::PathFindingOutput<'id, 'a> {
-        match destination.into_id(multigrap) {
+        match destination.to_id(multigrap) {
             None => tree,
             Some(id) => {
                 let entry = self.cache.entry((id, bundle.priority));

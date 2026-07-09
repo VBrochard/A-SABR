@@ -9,16 +9,15 @@ use crate::bundle::Bundle;
 use crate::contact::Contact;
 use crate::contact_manager::ContactManager;
 use crate::errors::ASABRError;
-use crate::multigraph::{ContactRef, Multigraph, NodeRef, RNodeRef};
+use crate::multigraph::{ContactRef, INodeRef, Multigraph, RoutableNodeRef};
 use crate::node_manager::NodeManager;
 use crate::pathfinding::{PathFindingOutput, Pathfinding};
 use crate::types::Date;
 
-#[cfg(feature = "first_depleted")]
-
 /// Comparison between two contacts using their original volume as criteria.
 /// Intended for use with Suppressor (asabr::limiting_contact::Suppressor)
 /// Have unspecified behavior on NaN
+#[cfg(feature = "first_depleted")]
 pub fn had_less_volume_than<CM: ContactManager>(a: &Contact<CM>, b: &Contact<CM>) -> Ordering {
     a.manager
         .get_original_volume()
@@ -53,7 +52,7 @@ pub fn ends_earlier_than<CM: ContactManager>(a: &Contact<CM>, b: &Contact<CM>) -
 pub fn get_next_to_suppress<'id, 'a, NM: NodeManager, CM: ContactManager>(
     graph: &Multigraph<'id, NM, CM>,
     paths: &PathFindingOutput<'id, 'a>,
-    destination: NodeRef<'id>,
+    destination: RoutableNodeRef<'id>,
     compare: fn(&Contact<CM>, &Contact<CM>) -> Ordering,
 ) -> Option<ContactRef<'id>> {
     let iter = paths.full_path_rev(destination, graph)?;
@@ -68,7 +67,7 @@ pub fn get_next_to_suppress<'id, 'a, NM: NodeManager, CM: ContactManager>(
 /// The maximum contact for compare (Self::new(..) argument) being blacklisted for future search on the same destination
 pub struct Suppressor<
     'id,
-    P: Pathfinding<'id, NM, CM, NodeRef<'id>>,
+    P: Pathfinding<'id, NM, CM, RoutableNodeRef<'id>>,
     NM: NodeManager,
     CM: ContactManager,
 > {
@@ -78,7 +77,7 @@ pub struct Suppressor<
     _phantom: PhantomData<fn(NM, CM)>,
 }
 
-impl<'id, P: Pathfinding<'id, NM, CM, NodeRef<'id>>, NM: NodeManager, CM: ContactManager>
+impl<'id, P: Pathfinding<'id, NM, CM, RoutableNodeRef<'id>>, NM: NodeManager, CM: ContactManager>
     Suppressor<'id, P, NM, CM>
 {
     pub fn new(
@@ -94,8 +93,8 @@ impl<'id, P: Pathfinding<'id, NM, CM, NodeRef<'id>>, NM: NodeManager, CM: Contac
         }
     }
 }
-impl<'id, P: Pathfinding<'id, NM, CM, NodeRef<'id>>, NM: NodeManager, CM: ContactManager>
-    Pathfinding<'id, NM, CM, NodeRef<'id>> for Suppressor<'id, P, NM, CM>
+impl<'id, P: Pathfinding<'id, NM, CM, RoutableNodeRef<'id>>, NM: NodeManager, CM: ContactManager>
+    Pathfinding<'id, NM, CM, RoutableNodeRef<'id>> for Suppressor<'id, P, NM, CM>
 {
     /// Perform pathfinding with the underlying pathfinder, using a contact suppression map.
     /// Warning: can permanently (aka, modify graph state without full rollback) de-suppress contacts (but cannot suppress some)
@@ -103,12 +102,12 @@ impl<'id, P: Pathfinding<'id, NM, CM, NodeRef<'id>>, NM: NodeManager, CM: Contac
         &'a mut self,
         multigraph: &mut Multigraph<'id, NM, CM>,
         current_time: Date,
-        source: RNodeRef<'id>,
+        source: INodeRef<'id>,
         bundle: &Bundle,
-        destination: &mut NodeRef<'id>,
+        destination: &mut RoutableNodeRef<'id>,
         prune_time: Option<Date>,
     ) -> Result<Option<PathFindingOutput<'id, 'a>>, ASABRError> {
-        let idx = multigraph.into_usize(*destination);
+        let idx = multigraph.routable_to_usize(*destination);
         let suppressions = &mut self.suppressed[idx];
         for ct in suppressions.iter() {
             multigraph[ct].suppressed = true
@@ -126,13 +125,13 @@ impl<'id, P: Pathfinding<'id, NM, CM, NodeRef<'id>>, NM: NodeManager, CM: Contac
         for ct in suppressions.iter() {
             multigraph[ct].suppressed = false
         }
-        if let Ok(Some(path)) = &r {
-            if let Some(to_suppress) =
-                get_next_to_suppress(multigraph, &path, *destination, self.function)
-            {
-                suppressions.push(to_suppress);
-            }
+        if let Ok(Some(path)) = &r
+            && let Some(to_suppress) =
+                get_next_to_suppress(multigraph, path, *destination, self.function)
+        {
+            suppressions.push(to_suppress);
         }
+
         r
     }
 }

@@ -7,7 +7,7 @@ use crate::bundle::Bundle;
 use crate::contact::Contact;
 use crate::contact_manager::ContactManager;
 use crate::errors::ASABRError;
-use crate::multigraph::{ContactRef, Multigraph, NodeRef, RNodeRef};
+use crate::multigraph::{ContactRef, INodeRef, Multigraph, RealNodeRef, RoutableNodeRef};
 use crate::node_manager::NodeManager;
 use crate::parsing::Either;
 use crate::pathfinding::destination::Destination;
@@ -59,7 +59,7 @@ impl<'id, 'a> Deref for PathFindingOutput<'id, 'a> {
 impl<'id, 'a> AsMut<[Option<PathFragment<'id>>]> for PathFindingOutput<'id, 'a> {
     fn as_mut(&mut self) -> &mut [Option<PathFragment<'id>>] {
         match &mut self.path_tree {
-            Either::Left(l) => *l,
+            Either::Left(l) => l,
             Either::Right(r) => r.as_mut(),
         }
     }
@@ -90,10 +90,10 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
     /// Return the list of hops making this path, if it is still a valid (and detected) one,
     pub fn get_full_path<NM: NodeManager, CM: ContactManager>(
         &self,
-        destination: NodeRef<'id>,
+        destination: RoutableNodeRef<'id>,
         graph: &Multigraph<'id, NM, CM>,
     ) -> Option<Vec<PathFragment<'id>>> {
-        let mut next = self[graph.into_usize(destination)]?;
+        let mut next = self[graph.routable_to_usize(destination)]?;
         let mut r = Vec::with_capacity(next.hop_count as usize + 1);
         r.push(next);
         while let Some(next_via) = next.via {
@@ -105,12 +105,12 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
     }
     pub fn full_path_rev<NM: NodeManager, CM: ContactManager>(
         &self,
-        destination: NodeRef<'id>,
+        destination: RoutableNodeRef<'id>,
         graph: &Multigraph<'id, NM, CM>,
     ) -> Option<PathIterator<'id, 'a, '_>> {
-        self[graph.into_usize(destination)].map(|_| PathIterator {
+        self[graph.routable_to_usize(destination)].map(|_| PathIterator {
             output: self,
-            last: Some(graph.into_usize(destination)),
+            last: Some(graph.routable_to_usize(destination)),
         })
     }
     pub fn into_owned<'b>(self) -> PathFindingOutput<'id, 'b> {
@@ -152,12 +152,12 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
     /// self paths should have no cycle (wich is true of any reasonable PathfindingOutput not modified by hand outside of the library)
     pub unsafe fn validate(
         &mut self,
-        dest: NodeRef<'id>,
+        dest: RoutableNodeRef<'id>,
         time: Date,
         bundle: &Bundle,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> bool {
-        let path = unsafe { self.get_path_mut(graph.into_usize(dest)) };
+        let path = unsafe { self.get_path_mut(graph.routable_to_usize(dest)) };
         path.is_some_and(|mut path| {
             let mut last_node = None;
             if let Some(PathFragment { arrival_time, .. }) = path.first_mut() {
@@ -173,7 +173,7 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
                         bundle,
                         fst.arrival_time,
                         nodeid,
-                        snd.rx_node.into(),
+                        graph.into_nodeid(snd.rx_node.into()),
                     ),
                     None => time,
                 };
@@ -189,7 +189,7 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
                         snd.arrival_time = tx_data.rx_window;
                     }
                 }
-                last_node = Some(fst.rx_node.into());
+                last_node = Some(graph.into_nodeid(fst.rx_node.into()));
                 idx += 1
             }
             true
@@ -219,19 +219,17 @@ impl<'id, 'a, 'b> core::fmt::Display for PathIterator<'id, 'a, 'b> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut copy = self.clone().peekable();
         if let Some(last) = copy.peek() {
-            let dest_id = usize::from(last.rx_node);
             writeln!(
                 f,
-                "Route to node {} at t={} with {} hop(s):",
-                dest_id, last.arrival_time.end, last.hop_count
+                "Route to {} at t={} with {} hop(s):",
+                last.rx_node, last.arrival_time.end, last.hop_count
             )?;
         };
         for frag in copy {
-            let node_id = usize::from(frag.rx_node);
             writeln!(
                 f,
                 "        - Reach node {} at t={} with {} hop(s)",
-                node_id, frag.arrival_time.end, frag.hop_count
+                frag.rx_node, frag.arrival_time.end, frag.hop_count
             )?;
         }
         Ok(())
@@ -268,7 +266,7 @@ pub trait Pathfinding<'id, NM: NodeManager, CM: ContactManager, D: Destination<'
         &'a mut self,
         multigraph: &mut Multigraph<'id, NM, CM>,
         routing_time: Date,
-        source: RNodeRef<'id>,
+        source: INodeRef<'id>,
         bundle: &Bundle,
         destination: &mut D,
         prune_time: Option<Date>,
@@ -296,9 +294,9 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
     graph: &Multigraph<'id, NM, CM>,
     last_hop: (&PathFragment<'id>, usize),
     bundle: &Bundle,
-    current_node: RNodeRef<'id>,
-    contacts: impl Iterator<Item = (RNodeRef<'id>, &'a NM, ContactRef<'id>, T)>,
-    previous_node: Option<RNodeRef<'id>>,
+    current_node: INodeRef<'id>,
+    contacts: impl Iterator<Item = (RealNodeRef<'id>, &'a NM, ContactRef<'id>, T)>,
+    previous_node: Option<INodeRef<'id>>,
     neigbhoor_id: NodeID,
 ) -> Option<PathFragment<'id>> {
     let send_time = match previous_node {
@@ -319,8 +317,13 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
         }
         true
     });
-    //                    Selected contact, rx_time,     dest node,     tx_time
-    let mut best: Option<(ContactRef<'id>, TimeInterval, RNodeRef<'id>, TimeInterval)> = None;
+    //                    Selected contact, rx_time,     dest node,        tx_time
+    let mut best: Option<(
+        ContactRef<'id>,
+        TimeInterval,
+        RealNodeRef<'id>,
+        TimeInterval,
+    )> = None;
 
     for (next_node_ref, next_node_manager, ctref, ct) in suppressed {
         if let Some((_, time, _, _)) = best

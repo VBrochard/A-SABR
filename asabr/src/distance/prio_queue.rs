@@ -11,7 +11,7 @@ use crate::{
 
 /// A custom if fairly classical implementation of a priority queue using a binary heap, allowing to pass a reference to the graph in order to compare elements
 /// This is a min priority queue respective to the distance D
-#[derive(Debug,Default)]
+#[derive(Debug, Default)]
 pub struct PrioQueue<'id, D: Distance<NM, CM>, NM: NodeManager, CM: ContactManager, T: Copy> {
     /// Triplet pathfragment, node reached by it, custom aditional data
     elts: Vec<(PathFragment<'id>, T)>,

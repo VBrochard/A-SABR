@@ -30,7 +30,7 @@ fn main() {
     .unwrap();
     println!(
         "ION CP parsed, found {} nodes (no management) & {} contacts (segmentation)",
-        contact_plan.vnodes.len()+contact_plan.realnodes.len(),
+        contact_plan.vnodes.len() + contact_plan.realnodes.len(),
         contact_plan.contacts.len()
     );
     // ION, with EVL
@@ -42,7 +42,7 @@ fn main() {
             .unwrap();
     println!(
         "ION CP parsed, found {} nodes (no management) & {} contacts (EVL)",
-        contact_plan.vnodes.len()+contact_plan.realnodes.len(),
+        contact_plan.vnodes.len() + contact_plan.realnodes.len(),
         contact_plan.contacts.len()
     );
 
@@ -55,7 +55,7 @@ fn main() {
             .unwrap();
     println!(
         "ION CP parsed, found {} nodes (no management) & {} contacts (EVL with priorities)",
-        contact_plan.vnodes.len()+contact_plan.realnodes.len(),
+        contact_plan.vnodes.len() + contact_plan.realnodes.len(),
         contact_plan.contacts.len()
     );
 
@@ -67,7 +67,7 @@ fn main() {
         TVGUtilContactPlan::parse::<NoManagement, SegmentationManager>(json.clone()).unwrap();
     println!(
         "Tvg-util CP parsed, found {} nodes (no management) & {} contacts (segmentation)",
-        contact_plan.vnodes.len()+contact_plan.realnodes.len(),
+        contact_plan.vnodes.len() + contact_plan.realnodes.len(),
         contact_plan.contacts.len()
     );
 
@@ -75,7 +75,7 @@ fn main() {
     let contact_plan = TVGUtilContactPlan::parse::<NoManagement, EVLManager>(json.clone()).unwrap();
     println!(
         "Tvg-util CP parsed, found {} nodes (no management) & {} contacts (EVL)",
-        contact_plan.vnodes.len()+contact_plan.realnodes.len(),
+        contact_plan.vnodes.len() + contact_plan.realnodes.len(),
         contact_plan.contacts.len()
     );
 
@@ -83,7 +83,7 @@ fn main() {
     let contact_plan = TVGUtilContactPlan::parse::<NoManagement, PQDManager>(json).unwrap();
     println!(
         "Tvg-util CP parsed, found {} nodes (no management) & {} contacts (queue-delay with priorities)",
-        contact_plan.vnodes.len()+contact_plan.realnodes.len(),
+        contact_plan.vnodes.len() + contact_plan.realnodes.len(),
         contact_plan.contacts.len()
     );
 
@@ -92,7 +92,7 @@ fn main() {
     let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
     println!(
         "A-SABR CP parsed (statically for nodes & contacts), found {} nodes (no management) & {} contacts (EVL)",
-        contact_plan.vnodes.len()+contact_plan.realnodes.len(),
+        contact_plan.vnodes.len() + contact_plan.realnodes.len(),
         contact_plan.contacts.len()
     );
 
@@ -103,7 +103,7 @@ fn main() {
     let contact_plan = parse_from_iter::<NoManagement, QDManager>(lines).unwrap();
     println!(
         "A-SABR CP parsed (statically for nodes & contacts), found {} nodes (no management) & {} contacts (queue-delay)",
-        contact_plan.vnodes.len()+contact_plan.realnodes.len(),
+        contact_plan.vnodes.len() + contact_plan.realnodes.len(),
         contact_plan.contacts.len()
     );
 
@@ -114,7 +114,7 @@ fn main() {
     let contact_plan = parse_from_iter::<NoManagement, CMDynStandard>(lines).unwrap();
     println!(
         "A-SABR CP parsed (statically for nodes, dynamically for contacts), found {} nodes (no management) & {} contacts (of various types)",
-        contact_plan.vnodes.len()+contact_plan.realnodes.len(),
+        contact_plan.vnodes.len() + contact_plan.realnodes.len(),
         contact_plan.contacts.len()
     );
 }

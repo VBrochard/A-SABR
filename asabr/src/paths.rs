@@ -1,4 +1,4 @@
-use crate::multigraph::{ContactRef, RNodeRef};
+use crate::multigraph::{ContactRef, RealNodeRef};
 use crate::types::{Date, HopCount, TimeInterval};
 use core::fmt::Display;
 
@@ -36,7 +36,7 @@ pub struct PathFragment<'id> {
     /// The arrival time to the final node in the original disktra
     pub arrival_time: TimeInterval,
     /// A reference to the receiving node for this hop.
-    pub rx_node: RNodeRef<'id>,
+    pub rx_node: RealNodeRef<'id>,
     // /// The cumulative transmission delay incurred on this path, often used for routing optimizations.
     // pub cumulative_delay: Duration,
     // /// The time at which this route stage expires, indicating when it is no longer valid.
@@ -59,7 +59,7 @@ impl<'id> PathFragment<'id> {
         arrival_time: TimeInterval,
         via_hop: Option<ViaHop<'id>>,
         hop_count: HopCount,
-        rx_node: RNodeRef<'id>,
+        rx_node: RealNodeRef<'id>,
     ) -> Self {
         Self {
             arrival_time,
@@ -70,7 +70,7 @@ impl<'id> PathFragment<'id> {
             // expiration: Date::MAX,
         }
     }
-    pub fn new_start(time: Date, node: RNodeRef<'id>) -> Self {
+    pub fn new_start(time: Date, node: RealNodeRef<'id>) -> Self {
         Self {
             via: None,
             hop_count: 0,

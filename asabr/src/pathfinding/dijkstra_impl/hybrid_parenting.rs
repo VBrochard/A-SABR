@@ -8,7 +8,7 @@ use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
     distance::Distance,
-    multigraph::{Multigraph, NodeRef, RNodeRef},
+    multigraph::{INodeRef, Multigraph, RoutableNodeRef},
     node_manager::NodeManager,
     pathfinding::{
         dijkstra::{DijkstraWorkspace, Disktra},
@@ -33,7 +33,6 @@ where
         second: &PathFragment<'id>,
         graph: &Multigraph<'id, NM, CM>,
         bundle: &Bundle,
-        actual_node: RNodeRef<'id>,
     ) -> bool;
 }
 
@@ -63,7 +62,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM> + HybridParen
     fn new(graph: &Multigraph<'id, NM, CM>) -> Self {
         Self {
             possible_paths: Vec::new(),
-            by_destination: vec![Vec::new(); graph.get_rnode_count()],
+            by_destination: vec![Vec::new(); graph.get_internal_count()],
             by_dest_vnode: vec![None; graph.get_vnode_count()],
             _phantom: PhantomData,
         }
@@ -82,25 +81,19 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM> + HybridParen
     fn try_insert(
         &mut self,
         proposition: PathFragment<'id>,
-        actual_node: NodeRef<'id>,
+        actual_node: RoutableNodeRef<'id>,
         graph: &Multigraph<'id, NM, CM>,
         bundle: &Bundle,
     ) -> Option<usize> {
         match actual_node {
-            NodeRef::R(actual_node) => {
+            RoutableNodeRef::I(actual_node) => {
                 let new_idx = self.possible_paths.len();
                 let routes_for_node = &mut self.by_destination[usize::from(actual_node)];
                 if let Some(fst) = routes_for_node.first_mut() {
                     if D::cmp(&proposition, &self.possible_paths[*fst], graph, bundle)
                         == Ordering::Less
                     {
-                        if D::keep_both(
-                            &proposition,
-                            &self.possible_paths[*fst],
-                            graph,
-                            bundle,
-                            actual_node,
-                        ) {
+                        if D::keep_both(&proposition, &self.possible_paths[*fst], graph, bundle) {
                             let tmp = *fst;
                             *fst = new_idx;
                             routes_for_node.push(tmp);
@@ -123,7 +116,6 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM> + HybridParen
                                 &self.possible_paths[*prop],
                                 graph,
                                 bundle,
-                                actual_node,
                             ) {
                                 return None;
                             }
@@ -138,7 +130,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM> + HybridParen
                     Some(new_idx)
                 }
             }
-            NodeRef::V(vnode) => match &mut self.by_dest_vnode[usize::from(vnode)] {
+            RoutableNodeRef::V(vnode) => match &mut self.by_dest_vnode[usize::from(vnode)] {
                 a @ None => {
                     let new_idx = self.possible_paths.len();
                     self.possible_paths.push(proposition);
@@ -159,28 +151,37 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM> + HybridParen
         }
     }
     #[inline(always)]
-    fn node_check(&mut self, _node: NodeRef<'id>, _graph: &Multigraph<'id, NM, CM>) -> bool {
+    fn node_check(
+        &mut self,
+        _node: RoutableNodeRef<'id>,
+        _graph: &Multigraph<'id, NM, CM>,
+    ) -> bool {
         true
     }
     fn poped_relevant_new(
         &mut self,
         frag: PathFragment<'id>,
-        node: NodeRef<'id>,
+        node: RoutableNodeRef<'id>,
         viaref: usize,
-    ) -> (bool, bool, Option<RNodeRef<'id>>) {
+    ) -> (bool, bool, Option<INodeRef<'id>>) {
         if self.possible_paths[viaref] != frag {
             (false, false, None)
         } else {
             let prev = self.possible_paths[viaref]
                 .via
-                .map(|ViaHop { parent_frag, .. }| self.possible_paths[parent_frag].rx_node);
+                .map(|ViaHop { parent_frag, .. }| unsafe {
+                    self.possible_paths[parent_frag]
+                        .rx_node
+                        .internal()
+                        .unwrap_unchecked()
+                });
             match node {
-                NodeRef::R(rnode) => (
+                RoutableNodeRef::I(rnode) => (
                     true,
                     Some(viaref) == self.by_destination[usize::from(rnode)].first().copied(),
                     prev,
                 ),
-                NodeRef::V(_vnode) => (true, true, prev),
+                RoutableNodeRef::V(_vnode) => (true, true, prev),
             }
         }
     }

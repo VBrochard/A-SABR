@@ -143,7 +143,7 @@ pub(crate) fn make_source<'id>(
     _bundle: &Bundle,
     graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
 ) -> PathFragment<'id> {
-    let Ok(NodeRef::R(node_ref)) = graph.node_id_ref(node_id.into()) else {
+    let Ok(NodeRef::I(node_ref)) = graph.node_id_ref(node_id.into()) else {
         panic!()
     };
     PathFragment::new(
@@ -153,7 +153,7 @@ pub(crate) fn make_source<'id>(
         },
         None,
         0,
-        node_ref,
+        node_ref.into(),
     )
 }
 

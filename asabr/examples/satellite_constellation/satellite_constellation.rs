@@ -1,21 +1,20 @@
-
 use a_sabr::bundle::Bundle;
 use a_sabr::choices;
 use a_sabr::contact_manager::legacy::evl::EVLManager;
 use a_sabr::distance::sabr::SABR;
 use a_sabr::errors::ASABRError;
+use a_sabr::mk_graph;
 use a_sabr::node_manager::NodeManager;
 use a_sabr::node_manager::none::NoManagement;
 use a_sabr::parse_transparent;
 use a_sabr::parsing::LexFrom;
-use a_sabr::pathfinding::Pathfinding;
 use a_sabr::pathfinding::HybridParenting;
+use a_sabr::pathfinding::Pathfinding;
 use a_sabr::transparent_NM;
 use a_sabr::types::Date;
 use a_sabr::types::Duration;
-use a_sabr::types::TimeInterval;
 use a_sabr::types::NodeID;
-use a_sabr::mk_graph;
+use a_sabr::types::TimeInterval;
 
 #[derive(Debug)]
 struct NoRetention {
@@ -113,11 +112,14 @@ fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<()
         size: 0,
         expiration: 1000,
     };
-    mk_graph!(graph,NM,EVLManager,cp_path,file);
+    mk_graph!(graph, NM, EVLManager, cp_path, file);
 
-    let mut finder = HybridParenting::<SABR,_,_>::new();
-    let source = graph.node_id_ref(0.into())?.real().ok_or(ASABRError::ContactPlanError("No Node 0"))?;
-    let mut destination = graph.node_id_ref(2.into())?;
+    let mut finder = HybridParenting::<SABR, _, _>::new();
+    let source = graph
+        .node_id_ref(0.into())?
+        .internal()
+        .ok_or(ASABRError::ContactPlanError("No Node 0"))?;
+    let mut destination = graph.node_id_ref(2.into())?.routable().unwrap();
     let res = finder.find_path(&mut graph, 0, source, &bundle, &mut destination, None);
     // let file = File::open(cp_path).unwrap();
     // let lines = BufReader::new(file).lines().map(|l| l.unwrap());
@@ -126,8 +128,6 @@ fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<()
     //     init_pathfinding::<NM, EVLManager, HybridParentingPath<NM, EVLManager, SABR>, _, _>(lines)?;
 
     println!("\nRunning with contact plan location={cp_path}, and destination node=2 ");
-
-    
 
     match res {
         Ok(Some(route)) => println!("{}", route.full_path_rev(destination, &graph).unwrap()),

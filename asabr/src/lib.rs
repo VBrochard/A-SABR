@@ -1,4 +1,4 @@
-// #![no_std]
+#![no_std]
 
 /// Module containing the adaptive contact definition.
 pub mod contact;

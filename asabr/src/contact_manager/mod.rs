@@ -20,8 +20,6 @@ pub mod segmentation;
 pub struct ContactManagerTxData {
     /// Timespan necessary to send all the data.
     pub tx_window: TimeInterval,
-    /// Expiration time.
-    pub expiration: Date,
     /// Timespan during wich data are received.
     pub rx_window: TimeInterval,
 }

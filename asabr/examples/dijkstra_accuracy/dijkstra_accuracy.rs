@@ -1,4 +1,3 @@
-
 use a_sabr::{
     bundle::Bundle,
     contact_manager::legacy::evl::EVLManager,
@@ -11,7 +10,6 @@ use a_sabr::{
     types::NodeID,
 };
 
-
 fn edge_case_example(cp_path: &str, dest: NodeID) -> Result<(), ASABRError> {
     let bundle = Bundle {
         source: 0.into(),
@@ -23,40 +21,56 @@ fn edge_case_example(cp_path: &str, dest: NodeID) -> Result<(), ASABRError> {
 
     // println!("Graph: {:#?}",graph);
 
-    let Ok(NodeRef::R(source)) = graph.node_id_ref(0.into()) else {
+    let Ok(NodeRef::I(source)) = graph.node_id_ref(0.into()) else {
         panic!()
     };
-    let mut dest = graph.node_id_ref(dest)?;
+    let mut dest = graph
+        .node_id_ref(dest)?
+        .internal()
+        .ok_or(ASABRError::ContactPlanError("Not a internal Node"))?;
     let mut node_finder = NodeParenting::<SABR>::new();
     let mut contact_finder = ContactParenting::<_, _, SABR>::new();
     let mut mpt_finder = HybridParenting::<SABR, _, _>::new();
 
-    println!("\nRunning with contact plan location={cp_path}, and destination node={dest} ");
+    println!(
+        "\nRunning with contact plan location={cp_path}, and destination node={} ",
+        NodeRef::from(dest)
+    );
     let res = node_finder
         .find_path(&mut graph, 0, source, &bundle, &mut dest, None)?
-        .ok_or(ASABRError::DryRunError("No path found in node parenting test"))?;
+        .ok_or(ASABRError::DryRunError(
+            "No path found in node parenting test",
+        ))?;
     print!("\nWith NodeParentingPath pathfinding. ");
-    println!("{}", res.full_path_rev(dest, &graph).unwrap());
+    println!("{}", res.full_path_rev(dest.into(), &graph).unwrap());
 
     let res = contact_finder
         .find_path(&mut graph, 0, source, &bundle, &mut dest, None)?
-        .ok_or(ASABRError::DryRunError("No path found in contact parenting test"))?;
-    
+        .ok_or(ASABRError::DryRunError(
+            "No path found in contact parenting test",
+        ))?;
+
     print!("With ContactParentingPath pathfinding. ");
-    println!("{}", res.full_path_rev(dest, &graph).unwrap());
+    println!("{}", res.full_path_rev(dest.into(), &graph).unwrap());
 
     let res = mpt_finder
         .find_path(&mut graph, 0, source, &bundle, &mut dest, None)?
         .ok_or(ASABRError::DryRunError("No path found in hybrid test"))?;
     print!("With HybridParentingPath pathfinding. ");
-    println!("{}", res.full_path_rev(dest, &graph).unwrap());
+    println!("{}", res.full_path_rev(dest.into(), &graph).unwrap());
 
     Ok(())
 }
 
 fn main() -> Result<(), ASABRError> {
-    edge_case_example("asabr/examples/dijkstra_accuracy/contact_plan_1.cp", 3.into())?;
-    edge_case_example("asabr/examples/dijkstra_accuracy/contact_plan_2.cp", 4.into())?;
+    edge_case_example(
+        "asabr/examples/dijkstra_accuracy/contact_plan_1.cp",
+        3.into(),
+    )?;
+    edge_case_example(
+        "asabr/examples/dijkstra_accuracy/contact_plan_2.cp",
+        4.into(),
+    )?;
 
     println!(
         "\nN.B.: Results with the single end-to-end \"Path\" variant. We would get the same results with their \"Tree\" versions."

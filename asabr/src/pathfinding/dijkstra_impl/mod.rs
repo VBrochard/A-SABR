@@ -39,7 +39,6 @@ pub fn flatten<'id, 'a>(
                         let new_idx = elided_tree.len();
                         new_indexs[old_idx] = Some(new_idx);
 
-
                         via.parent_frag = new_idx;
                         elided_tree[index] = Some(frag);
                         frag = paths[old_idx];
