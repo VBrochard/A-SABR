@@ -374,482 +374,683 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
     })
 }
 
-// #[cfg(test)]
-// mod tests {
-//     #[cfg(feature = "contact_suppression")]
-//     use core::error;
+#[cfg(test)]
+mod tests {
+    #[cfg(feature = "contact_suppression")]
+    use core::error;
 
-//     use super::*;
-//     use crate::bundle::Bundle;
+    use super::*;
+    use crate::bundle::Bundle;
 
-//     use crate::contact_manager::legacy::evl::EVLManager;
-//     use crate::multigraph::NodeRef;
+    use crate::contact_manager::legacy::evl::EVLManager;
+    use crate::multigraph::NodeRef;
 
-//     use crate::node_manager::NodeManager;
-//     use crate::node_manager::none::NoManagement;
-//     use crate::pathfinding::test_helpers::*;
-//     use crate::{distance, mk_graph_pathfinding, pathfinding};
+    use crate::node_manager::NodeManager;
+    use crate::node_manager::none::NoManagement;
+    use crate::pathfinding::test_helpers::*;
+    use crate::distance;
+    use crate::contact_plan::asabr_file_lexer::parse_from_iter;
+    use generativity::make_guard;
 
-//     #[track_caller]
-//     fn run_hop<'id, T: Pathfinding<'id, NM, CM>, CM: ContactManager, NM: NodeManager>(
-//         graph: &Multigraph<'id, NM, CM>,
-//         bundle: &Bundle,
-//         current_node: RNodeRef<'id>,
-//         next_node: RNodeRef<'id>,
-//         send_time: Date,
-//         contacts: impl Iterator<Item = ContactRef<'id>>,
-//     ) -> Option<PathFragment<'id>> {
-//         try_make_hop(
-//             graph,
-//             (
-//                 &PathFragment {
-//                     via: None,
-//                     hop_count: 0,
-//                     arrival_time: TimeInterval { start: 0, end: 0 },
-//                 },
-//                 0,
-//             ),
-//             bundle,
-//             current_node,
-//             next_node,
-//             send_time,
-//             contacts,
-//         )
-//     }
+    #[track_caller]
+    fn run_hop<'id, 'a, T: Pathfinding<'id, NM, CM, Dest<'id>>, CM: ContactManager + 'id, NM: NodeManager + 'id>(
+        graph: &'a Multigraph<'id, NM, CM>,
+        bundle: &Bundle,
+        current_node: RNodeRef<'id>,
+        next_node: RNodeRef<'id>,
+        send_time: Date,
+        contacts: impl Iterator<Item = (RNodeRef<'id>, &'a NM, ContactRef<'id>, &'a Contact<CM>)>,
+    ) -> Option<PathFragment<'id>> {
+        // Keep the initial fragment alive for the duration of the try_make_hop call to satisfy borrow checker lifetime constraints
+        let prev_frag = PathFragment {
+            via: None,
+            hop_count: 0,
+            arrival_time: TimeInterval { start: send_time, end: send_time },
+            rx_node: current_node,
+        };
+        
+        try_make_hop(
+            graph,
+            (&prev_frag, 0),
+            bundle,
+            current_node,
+            contacts,
+            None, // No previous node for the initial hop
+            next_node.into(),
+        )
+    }
 
-//     type Finder<'id> = pathfinding::hybrid_parenting::HybridParenting<
-//         'id,
-//         false,
-//         NoManagement,
-//         EVLManager,
-//         distance::sabr::SABR,
-//     >;
+    type Finder<'id> = HybridParenting<
+        'id,
+        distance::sabr::SABR,
+        NoManagement,
+        EVLManager,
+    >;
 
-//     fn run_hop_on_graph<A>(
-//         graph: &str,
-//         bundle: &Bundle,
-//         f: impl for<'a> FnOnce(Option<PathFragment<'a>>) -> Result<A, ASABRError>,
-//     ) -> Result<A, ASABRError> {
-//         mk_graph_pathfinding!(graph, finder, NoManagement, EVLManager, Finder, graph, raw);
-//         let mut refs = Vec::new();
-//         for i in 0..1 {
-//             if let Ok(NodeRef::R(re)) = graph.node_id_ref(i) {
-//                 refs.push(re)
-//             } else {
-//                 panic!("")
-//             }
-//         }
-//         let r = run_hop(
-//             &mut graph,
-//             bundle,
-//             refs[0],
-//             refs[1],
-//             0.0,
-//             graph.iter_contacts(refs[0], refs[1]),
-//         );
-//         f(r)
-//     }
+    fn run_hop_on_graph<A>(
+        graph_str: &str,
+        bundle: &Bundle,
+        f: impl for<'a> FnOnce(Option<PathFragment<'a>>) -> Result<A, ASABRError>,
+    ) -> Result<A, ASABRError> {
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let graph = Multigraph::new(id, contact_plan).unwrap();
 
-//     #[test]
-//     fn test_empty_contacts() {
-//         // let bundle = make_bundle(1, 1, 50.0, 2000.0);
-//         // let source = make_source::<NoManagement>(0.0, 0, &bundle);
-//         let graph = "node 0 A node 1 B";
-//         let bundle = make_bundle(1, 1, 100.0, 1000.0);
-//         run_hop_on_graph(graph, &bundle, |result| {
-//             assert!(
-//                 result.is_none(),
-//                 "TEST FAILED: Expected None when contacts iterator is empty."
-//             );
-//             Ok(())
-//         });
-//     }
+        let mut refs = Vec::new();
+        for i in 0..2 { 
+            if let Ok(NodeRef::R(re)) = graph.node_id_ref(i.into()) {
+                refs.push(re)
+            } else {
+                panic!("Node {} missing", i)
+            }
+        }
+        
+        // Build the required tuple iterator
+        // directly bind the receiver to refs[1] as this simulates a strict A -> B hop
+        let contacts_iter = graph.iter_contacts(refs[0], refs[1]).map(|c_ref| {
+            let contact = &graph[c_ref];
+            let rx_rnode_ref = refs[1]; 
+            let nm = &graph[rx_rnode_ref].manager;
+            
+            (rx_rnode_ref, nm, c_ref, contact)
+        });
 
-//     #[test]
-//     fn test_bundle_too_large() {
-//         let graph = "node 0 A node 1 B
-//                             contact 0 1 0 200 100 1";
-//         run_hop_on_graph(graph, &make_bundle(1, 1, 999_999., 1000.), |result| {
-//             assert!(
-//                 result.is_none(),
-//                 "TEST FAILED: Expected None when the bundle size exceeds contact capacity."
-//             );
-//             Ok(())
-//         });
-//     }
+        let r = run_hop::<Finder, _, _>(
+            &graph,
+            bundle,
+            refs[0],
+            refs[1],
+            0,
+            contacts_iter,
+        );
+        f(r)
+    }
 
-//     #[test]
-//     fn test_single_contact_valid() {
-//         let graph = "node 0 A node 1 B
-//                             contact 0 1 0 200 100 1";
-//         run_hop_on_graph(graph, &make_bundle(1, 1, 50., 1000.), |result| {
-//             assert!(
-//                 result.is_some(),
-//                 "TEST FAILED: Expected Some when the contact is valid and the bundle size is within contact capacity."
-//             );
-//             Ok(())
-//         });
-//     }
+    #[test]
+    fn test_empty_contacts() {
+        let graph = "node 0 A node 1 B";
+        // Priority: 1, Size: 100, Expiration: 1000
+        let bundle = make_bundle(1, 100, 1000); 
+        
+        run_hop_on_graph(graph, &bundle, |result| {
+            assert!(
+                result.is_none(),
+                "TEST FAILED: Expected None when contacts iterator is empty."
+            );
+            Ok(())
+        }).unwrap();
+    }
 
-//     #[cfg(feature = "contact_suppression")]
-//     #[test]
-//     fn test_all_contacts_suppressed() -> Result<(), alloc::boxed::Box<dyn error::Error>> {
-//         use generativity::make_guard;
+    #[test]
+    fn test_bundle_too_large() {
+        let graph = "node 0 A node 1 B
+                            contact 0 1 0 200 100 1";
+        
+        // Priority: 1, Size: 999_999, Expiration: 1000
+        let bundle = make_bundle(1, 999_999, 1000);
+        
+        run_hop_on_graph(graph, &bundle, |result| {
+            assert!(
+                result.is_none(),
+                "TEST FAILED: Expected None when the bundle size exceeds contact capacity."
+            );
+            Ok(())
+        }).unwrap();
+    }
 
-//         use crate::contact_plan::asabr_file_lexer::parse_from_iter;
+    #[test]
+    fn test_single_contact_valid() {
+        let graph = "node 0 A node 1 B
+                            contact 0 1 0 200 100 1";
+        // Priority: 1, Size: 50, Expiration: 1000
+        let bundle = make_bundle(1, 50, 1000);
 
-//         let graph = "node 0 A node 1 B
-//                             contact 0 1 0 200 100 1
-//                             contact 0 1 20 100 50 1
-//                             contact 0 1 10 300 100 1"
-//             .lines();
-//         make_guard!(id);
-//         let mut graph =
-//             Multigraph::<'_, NoManagement, EVLManager>::new(id, parse_from_iter(graph)?)?;
+        run_hop_on_graph(graph, &bundle, |result| {
+            // A valid contact exists, so try_make_hop should successfully return a PathFragment
+            assert!(
+                result.is_some(),
+                "TEST FAILED: Expected Some when the contact is valid and the bundle size is within contact capacity."
+            );
+            Ok(())
+        }).unwrap();
+    }
 
-//         let mut refs = Vec::new();
+    #[cfg(feature = "contact_suppression")]
+    #[test]
+    fn test_all_contacts_suppressed() -> Result<(), alloc::boxed::Box<dyn error::Error>> {
+        use generativity::make_guard;
 
-//         for i in 0..1 {
-//             if let Ok(NodeRef::R(re)) = graph.node_id_ref(i) {
-//                 refs.push(re)
-//             } else {
-//                 panic!("")
-//             }
-//         }
-//         for (_, ct) in graph.iter_contacts_mut(refs[0], refs[1]) {
-//             ct.suppressed = true
-//         }
-//         let result = run_hop(
-//             &mut graph,
-//             &make_bundle(1, 1, 100., 1000.),
-//             refs[0],
-//             refs[1],
-//             0.0,
-//             graph.iter_contacts(refs[0], refs[1]),
-//         );
+        use crate::contact_plan::asabr_file_lexer::parse_from_iter;
 
-//         assert!(
-//             result.is_none(),
-//             "TEST FAILED: Expected None when all contacts are suppressed."
-//         );
-//         Ok(())
-//     }
+        let graph_str = "node 0 A node 1 B
+                            contact 0 1 0 200 100 1
+                            contact 0 1 20 100 50 1
+                            contact 0 1 10 300 100 1";
+        // Setup the graph
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(graph_str.lines())?;
+        make_guard!(id);
+        let mut graph = Multigraph::new(id, contact_plan)?;
 
-//     #[cfg(feature = "contact_suppression")]
-//     #[test]
-//     fn test_partial_suppression_uses_valid_contact()
-//     -> Result<(), alloc::boxed::Box<dyn error::Error>> {
-//         use generativity::make_guard;
+        let mut refs = Vec::new();
 
-//         use crate::contact_plan::asabr_file_lexer::parse_from_iter;
+        for i in 0..2 {
+            if let Ok(NodeRef::R(re)) = graph.node_id_ref(i.into()) {
+                refs.push(re)
+            } else {
+                panic!("Node {} missing", i)
+            }
+        }
 
-//         let graph = "node 0 A node 1 B
-//                             contact 0 1 0 200 100 1
-//                             contact 0 1 0 200 100 2"
-//             .lines();
-//         make_guard!(id);
-//         let mut graph =
-//             Multigraph::<'_, NoManagement, EVLManager>::new(id, parse_from_iter(graph)?)?;
+        // Mutate graph to suppress all contacts
+        for (_, ct) in graph.iter_contacts_mut(refs[0], refs[1]) {
+            ct.suppressed = true;
+        }
 
-//         let mut refs = Vec::new();
+        let contacts_iter = graph.iter_contacts(refs[0], refs[1]).map(|c_ref| {
+            let contact = &graph[c_ref];
+            let rx_rnode_ref = refs[1]; 
+            let nm = &graph[rx_rnode_ref].manager;
+            (rx_rnode_ref, nm, c_ref, contact)
+        });
 
-//         for i in 0..1 {
-//             if let Ok(NodeRef::R(re)) = graph.node_id_ref(i) {
-//                 refs.push(re)
-//             } else {
-//                 panic!("")
-//             }
-//         }
-//         for (_, ct) in graph.iter_contacts_mut(refs[0], refs[1]).take(1) {
-//             ct.suppressed = true
-//         }
-//         let result = run_hop(
-//             &mut graph,
-//             &make_bundle(1, 1, 100., 1000.),
-//             refs[0],
-//             refs[1],
-//             0.0,
-//             graph.iter_contacts(refs[0], refs[1]),
-//         );
+        let bundle = make_bundle(1, 100, 1000);
 
-//         assert!(
-//             result.is_some(),
-//             "TEST FAILED: Expected Some from non-suppressed contact."
-//         );
-//         let route = result.unwrap();
-//         assert_eq!(
-//             route.arrival_time.end, 2.1,
-//             "TEST FAILED: Expected arrival 2.1 from non-suppressed contact (got {}).",
-//             route.arrival_time.end
-//         );
-//         Ok(())
-//     }
+        let result = run_hop::<Finder, _, _>(
+            &graph,
+            &bundle,
+            refs[0],
+            refs[1],
+            0,
+            contacts_iter,
+        );
 
-//     #[test]
-//     fn test_node_tx_refusing() {
-//         use generativity::make_guard;
+        assert!(
+            result.is_none(),
+            "TEST FAILED: Expected None when all contacts are suppressed."
+        );
+        Ok(())
+    }
 
-// use crate::contact_plan::ContactPlan;
+    #[cfg(feature = "contact_suppression")]
+    #[test]
+    fn test_partial_suppression_uses_valid_contact()
+    -> Result<(), alloc::boxed::Box<dyn error::Error>> {
 
-//         let bundle = make_bundle(1, 1, 1.0, 2000.0);
-//         let source = make_source::<MockNodeManager>(0.0, 0, &bundle);
-//         let tx = make_vertex(0, "A", MockNodeManager::refusing_tx());
-//         let rx = make_vertex(1, "B", MockNodeManager::accepting());
-//         let nodes = vec![tx, rx];
-//         let contacts = vec![make_contact::<MockNodeManager>(
-//             0, 1, 0.0, 2000.0, 100.0, 1.0,
-//         )];
+        let graph_str = "node 0 A node 1 B
+                            contact 0 1 0 200 100 1
+                            contact 0 1 0 200 100 2";
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(graph_str.lines())?;
+        make_guard!(id);
+        let mut graph = Multigraph::new(id, contact_plan)?;
 
-//         make_guard!(id);
-//         let graph = Multigraph::new(id, ContactPlan{
-//             realnodes: nodes,
-//             vnodes: vec![],
-//             contacts: contacts,
-//         });
+        let mut refs = Vec::new();
 
-//         let result = try_make_hop(&graph?,  todo!(),&bundle, );
+        for i in 0..2 {
+            if let Ok(NodeRef::R(re)) = graph.node_id_ref(i.into()) {
+                refs.push(re)
+            } else {
+                panic!("Node {} missing", i)
+            }
+        }
 
-//         assert!(
-//             result.is_none(),
-//             "TEST FAILED: Expected None when tx node refuses to emit."
-//         );
-//     }
+        // Suppress ONLY the first contact (the one with delay = 1)
+        for (_, ct) in graph.iter_contacts_mut(refs[0], refs[1]).take(1) {
+            ct.suppressed = true;
+        }
 
-//     #[test]
-//     fn test_node_rx_refusing() {
-//         let bundle = make_bundle(1, 1, 1.0, 2000.0);
-//         let source = make_source::<MockNodeManager>(0.0, 0, &bundle);
-//         let tx = make_node_rc(0, "A", MockNodeManager::accepting());
-//         let rx = make_node_rc(1, "B", MockNodeManager::refusing_rx());
-//         let nodes = vec![tx, rx];
-//         let contacts = vec![make_contact_rc::<MockNodeManager>(
-//             0, 1, 0.0, 2000.0, 100.0, 1.0,
-//         )];
+        // Build the updated iterator
+        let contacts_iter = graph.iter_contacts(refs[0], refs[1]).map(|c_ref| {
+            let contact = &graph[c_ref];
+            let rx_rnode_ref = refs[1]; 
+            let nm = &graph[rx_rnode_ref].manager;
+            (rx_rnode_ref, nm, c_ref, contact)
+        });
 
-//         let result = run_hop(0, &source, &bundle, 1, &contacts, &nodes);
+        let bundle = make_bundle(1, 100, 1000);
+        
+        let result = run_hop::<Finder, _, _>(
+            &graph,
+            &bundle,
+            refs[0],
+            refs[1],
+            0,
+            contacts_iter,
+        );
 
-//         assert!(
-//             result.is_none(),
-//             "TEST FAILED: Expected None when rx node refuses to receive."
-//         );
-//     }
+        assert!(
+            result.is_some(),
+            "TEST FAILED: Expected Some from non-suppressed contact."
+        );
+        let route = result.unwrap();
+        assert_eq!(
+            route.arrival_time.end, 3,
+            "TEST FAILED: Expected arrival 3 from non-suppressed contact (got {}).",
+            route.arrival_time.end
+        );
+        Ok(())
+    }
 
-//     #[test]
-//     fn test_node_proc_delay() {
-//         let bundle = make_bundle(1, 1, 10.0, 2000.0);
-//         let source = make_source::<MockNodeManager>(0.0, 0, &bundle);
-//         let tx = make_node_rc(0, "A", MockNodeManager::processing(2.0));
-//         let rx = make_node_rc(1, "B", MockNodeManager::accepting());
-//         let nodes = vec![tx, rx];
-//         let contacts = vec![make_contact_rc::<MockNodeManager>(
-//             0, 1, 0.0, 2000.0, 100.0, 1.0,
-//         )];
+    #[test]
+    fn test_node_tx_refusing() {
+        use generativity::make_guard;
+        use crate::contact_plan::ContactPlan;
 
-//         let result = run_hop(0, &source, &bundle, 1, &contacts, &nodes);
+        // Setup the testing elements with MockNodeManager
+        let bundle = make_bundle(1, 1, 2000);
+        
+        // Create a transmitting node that explicitly refuses to transmit
+        let tx_node = make_vertex(0, "A", MockNodeManager::refusing_tx());
+        // Create a receiving node that accepts everything
+        let rx_node = make_vertex(1, "B", MockNodeManager::accepting());
+        let nodes = vec![tx_node, rx_node];
+        
+        // tx=0, rx=1, start=0, end=2000, rate=100, delay=1
+        let contact_tuple = make_contact(0, 1, 0, 2000, 100, 1);
+        let contacts = vec![contact_tuple];
 
-//         assert!(
-//             result.is_some(),
-//             "TEST FAILED: Expected Some even with node processing delay."
-//         );
-//         let route = result.unwrap();
-//         // without node_proc : sending_time = 0.0 -> tx_end = 0.1 -> arrival = 1.1
-//         // with node_proc : sending_time = 2.0 -> tx_end = 2.1 -> arrival = 3.1
-//         assert_eq!(
-//             route.at_time, 3.1,
-//             "TEST FAILED: Arrival should account for the 2s node processing delay (expected 3.1, got {}).",
-//             route.at_time
-//         );
-//     }
+        // Build the ContactPlan and the Graph manually
+        let plan = ContactPlan {
+            realnodes: nodes,
+            vnodes: vec![],
+            contacts: contacts,
+        };
 
-//     #[test]
-//     fn test_best_contact_selected_1_hop() {
-//         let bundle = make_bundle(1, 1, 100.0, 2000.0);
-//         let source = make_source::<NoManagement>(5.0, 0, &bundle);
-//         let tx = make_node_rc(0, "A", NoManagement {});
-//         let rx = make_node_rc(1, "B", NoManagement {});
-//         let nodes = vec![tx, rx];
-//         // Contact A : arrival = 11.0
-//         let contact_a = make_contact_rc::<NoManagement>(0, 1, 0.0, 50.0, 100.0, 5.0);
-//         // Contact B : arrival = 8.0 -> should be the one returned
-//         let contact_b = make_contact_rc::<NoManagement>(0, 1, 0.0, 200.0, 100.0, 2.0);
-//         // Contact C : start = 10.0 > arrival(8.0) -> pruned
-//         let contact_c = make_contact_rc::<NoManagement>(0, 1, 10.0, 100.0, 50.0, 1.0);
-//         // Contact D : start = 20.0 > arrival(8.0) -> pruned
-//         let contact_d = make_contact_rc::<NoManagement>(0, 1, 20.0, 30.0, 100.0, 0.5);
+        make_guard!(id);
+        let graph = Multigraph::new(id, plan).unwrap();
 
-//         let result = run_hop(
-//             0,
-//             &source,
-//             &bundle,
-//             1,
-//             &[contact_a, contact_b, contact_c, contact_d],
-//             &nodes,
-//         );
+        // Extract safe references
+        let tx_ref = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::R(r) => r,
+            _ => panic!("Expected RNodeRef"),
+        };
+        let rx_ref = match graph.node_id_ref(1.into()).unwrap() {
+            NodeRef::R(r) => r,
+            _ => panic!("Expected RNodeRef"),
+        };
 
-//         assert!(
-//             result.is_some(),
-//             "TEST FAILED: Expected Some, at least one contact should be valid."
-//         );
-//         let route = result.unwrap();
+        // Build the required contact iterator
+        // Since we only have 1 contact, we can just grab it by index 0 in the graph
+        let contacts_iter = graph.iter_contacts(tx_ref, rx_ref).map(|c_ref| {
+            let contact = &graph[c_ref];
+            let nm = &graph[rx_ref].manager;
+            (rx_ref, nm, c_ref, contact)
+        });
 
-//         // Contact B should have been selected : arrival = tx_end(6.0) + delay(2.0) = 8.0
-//         assert_eq!(
-//             route.at_time, 8.0,
-//             "TEST FAILED: Expected arrival 8.0 from contact B (got {}).",
-//             route.at_time
-//         );
-//         assert_eq!(
-//             route.hop_count, 1,
-//             "TEST FAILED: Expected hop_count = 1 (got {}).",
-//             route.hop_count
-//         );
-//         assert_eq!(
-//             route.cumulative_delay, 2.0,
-//             "TEST FAILED: Expected cumulative_delay=2.0 from contact B delay (got {}).",
-//             route.cumulative_delay
-//         );
-//         assert_eq!(
-//             route.expiration, 200.0,
-//             "TEST FAILED: Expected expiration = 200.0 from contact B end (got {}).",
-//             route.expiration
-//         );
-//         assert!(
-//             route.via.is_some(),
-//             "TEST FAILED: Expected a ViaHop to be set."
-//         );
-//     }
+        // Bypass the run_hop helper to manually inject a previous_node
+        let prev_frag = PathFragment {
+            via: None,
+            hop_count: 0,
+            arrival_time: crate::types::TimeInterval { start: 0, end: 0 },
+            rx_node: tx_ref,
+        };
 
-//     #[test]
-//     fn test_best_contact_selected_2_hops() {
-//         let ctx = make_hop_context(100.0);
-//         // We set the expiration on the source to test that min(contact.end - cumulative_delay, source.expiration) works
-//         ctx.source.borrow_mut().expiration = 150.0;
+        let result = try_make_hop(
+            &graph,
+            (&prev_frag, 0),
+            &bundle,
+            tx_ref,
+            contacts_iter,
+            Some(tx_ref),
+            rx_ref.into(),
+        );
 
-//         // Contact A : arrival = 2.0 -> the best one
-//         let contact_a = make_contact_rc::<NoManagement>(0, 1, 0.0, 200.0, 100.0, 1.0);
-//         // Contact B : arrival = 6.0
-//         let contact_b = make_contact_rc::<NoManagement>(0, 1, 0.0, 200.0, 100.0, 5.0);
+        assert!(
+            result.is_none(),
+            "TEST FAILED: Expected None when tx node refuses to emit."
+        );
+    }
 
-//         let hop1 = run_hop(
-//             0,
-//             &ctx.source,
-//             &ctx.bundle,
-//             1,
-//             &[contact_a, contact_b],
-//             &ctx.nodes,
-//         )
-//         .expect("TEST FAILED: Hop 1 should succeed.");
+    #[test]
+    fn test_node_rx_refusing() {
+        use generativity::make_guard;
+        use crate::contact_plan::ContactPlan;
 
-//         assert_eq!(
-//             hop1.at_time, 2.0,
-//             "Hop 1 FAILED: Expected arrival 2.0 (got {}).",
-//             hop1.at_time
-//         );
-//         assert_eq!(
-//             hop1.hop_count, 1,
-//             "Hop 1 FAILED: Expected hop_count = 1 (got {}).",
-//             hop1.hop_count
-//         );
-//         assert_eq!(
-//             hop1.cumulative_delay, 1.0,
-//             "Hop 1 FAILED: Expected cumulative_delay = 1.0 (got {}).",
-//             hop1.cumulative_delay
-//         );
-//         // min(contact_a.end(200.0) - cumulative_delay(0.0), source.expiration(150.0)) = 150.0
-//         assert_eq!(
-//             hop1.expiration, 150.0,
-//             "Hop 1 FAILED: Expected expiration = 150.0 limited by source.expiration (got {}).",
-//             hop1.expiration
-//         );
+        let bundle = make_bundle(1, 1, 2000);
 
-//         // We take the result of the first hop as a new source
-//         let source2: SharedRouteStage<NoManagement, EVLManager> = Rc::new(RefCell::new(hop1));
-//         let tx1 = make_node_rc(1, "B", NoManagement {});
-//         let rx2 = make_node_rc(2, "C", NoManagement {});
-//         let node0 = &ctx.nodes[0]; // Copy the first node previously built, so we have the complete
-//         // 3-node graph.
-//         let nodes = vec![node0.clone(), tx1, rx2];
+        let tx_node = make_vertex(0, "A", MockNodeManager::accepting());
+        let rx_node = make_vertex(1, "B", MockNodeManager::refusing_rx());
+        let nodes = vec![tx_node, rx_node];
 
-//         // Contacts with end = 1000.0 so that source2.expiration is the limiting factor
-//         // Contact C : arrival = 3.5 -> the best one
-//         let contact_c = make_contact_rc::<NoManagement>(1, 2, 0.0, 1000.0, 100.0, 0.5);
-//         // Contact D : arrival = 5.0
-//         let contact_d = make_contact_rc::<NoManagement>(1, 2, 0.0, 1000.0, 100.0, 2.0);
+        let contact_tuple = make_contact(0, 1, 0, 2000, 100, 1);
+        let contacts = vec![contact_tuple];
 
-//         let hop2 = run_hop(0, &source2, &ctx.bundle, 2, &[contact_c, contact_d], &nodes)
-//             .expect("TEST FAILED: Hop 2 should succeed.");
+        let plan = ContactPlan {
+            realnodes: nodes,
+            vnodes: vec![],
+            contacts: contacts,
+        };
+        make_guard!(id);
+        let graph = Multigraph::new(id, plan).unwrap();
 
-//         assert_eq!(
-//             hop2.at_time, 3.5,
-//             "Hop 2 FAILED: Expected arrival 3.5 (got {}).",
-//             hop2.at_time
-//         );
-//         assert_eq!(
-//             hop2.hop_count, 2,
-//             "Hop 2 FAILED: Expected hop_count=2 (got {}).",
-//             hop2.hop_count
-//         );
-//         assert_eq!(
-//             hop2.cumulative_delay, 1.5,
-//             "Hop 2 FAILED: Expected cumulative_delay=1.5 (got {}).",
-//             hop2.cumulative_delay
-//         );
-//         // min(contact_c.end(1000.0) - cumulative_delay(1.0), source2.expiration(150.0)) = 150.0
-//         assert_eq!(
-//             hop2.expiration, 150.0,
-//             "Hop 2 FAILED: Expected expiration=150.0 limited by propagated source.expiration (got {}).",
-//             hop2.expiration
-//         );
-//         assert!(
-//             hop2.via.is_some(),
-//             "Hop 2 FAILED: Expected a ViaHop to be set."
-//         );
-//     }
+        let tx_ref = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::R(r) => r,
+            _ => panic!("Expected RNodeRef"),
+        };
+        let rx_ref = match graph.node_id_ref(1.into()).unwrap() {
+            NodeRef::R(r) => r,
+            _ => panic!("Expected RNodeRef"),
+        };
 
-//     #[test]
-//     fn test_to_node_equals_receiver_vertex_id() {
-//         let ctx = make_hop_context(50.0);
-//         let contacts = vec![make_contact_rc::<NoManagement>(
-//             0, 1, 0.0, 200.0, 100.0, 1.0,
-//         )];
+        let contacts_iter = graph.iter_contacts(tx_ref, rx_ref).map(|c_ref| {
+            let contact = &graph[c_ref];
+            let nm = &graph[rx_ref].manager;
+            (rx_ref, nm, c_ref, contact)
+        });
 
-//         // Pass receiver_id = 1 (same as contact's rx_node_id): to_node should be 1
-//         let result = run_hop(0, &ctx.source, &ctx.bundle, 1, &contacts, &ctx.nodes);
-//         let route = result.expect("Expected a valid hop");
-//         assert_eq!(
-//             route.to_node, 1,
-//             "to_node should equal the receiver_vertex_id (1), got {}",
-//             route.to_node
-//         );
-//     }
+        type MockFinder<'id> = HybridParenting<
+            'id,
+            distance::sabr::SABR,
+            MockNodeManager,
+            EVLManager,
+        >;
 
-//     #[test]
-//     fn test_vnode_receiver_sets_to_node() {
-//         let ctx = make_hop_context(50.0);
-//         // Contact goes from real node 0 to real node 1
-//         let contacts = vec![make_contact::<NoManagement>(0, 1, 0.0, 200.0, 100.0, 1.0)];
+        let result = run_hop::<MockFinder, _, _>(
+            &graph,
+            &bundle,
+            tx_ref,
+            rx_ref,
+            0,
+            contacts_iter,
+        );
 
-//         // Pass receiver_id = 42 (a vnode vertex ID, distinct from contact's rx_node_id = 1).
-//         // to_node must be set to the receiver vertex ID, not the contact's rx_node_id.
-//         let result = run_hop(0, &ctx.source, &ctx.bundle, 42, &contacts, &ctx.nodes);
-//         let route = result.expect("Expected a valid hop even with a vnode receiver");
-//         assert_eq!(
-//             route.to_node, 42,
-//             "to_node should equal the vnode receiver_vertex_id (42), got {}",
-//             route.to_node
-//         );
+        assert!(
+            result.is_none(),
+            "TEST FAILED: Expected None when rx node refuses to receive."
+        );
+    }
 
-//         // The ViaHop should still reference the real nodes from the contact
-//         let via = route.via.as_ref().expect("Expected a ViaHop");
-//         assert_eq!(
-//             via.tx_node.borrow().info.id,
-//             0,
-//             "ViaHop tx_node should be the real tx node (0)"
-//         );
-//         assert_eq!(
-//             via.rx_node.borrow().info.id,
-//             1,
-//             "ViaHop rx_node should be the real rx node (1), not the vnode"
-//         );
-//     }
-// }
+    #[test]
+    fn test_node_proc_delay() {
+        use generativity::make_guard;
+        use crate::contact_plan::ContactPlan;
+
+        // Setup bundle: Priority 1, Size 100 (integer division), Expiration 2000
+        let bundle = make_bundle(1, 100, 2000);
+        
+        let tx_node = make_vertex(0, "A", MockNodeManager::processing(2));
+        let rx_node = make_vertex(1, "B", MockNodeManager::accepting());
+        let nodes = vec![tx_node, rx_node];
+
+        let contact_tuple = make_contact(0, 1, 0, 2000, 100, 1);
+        let contacts = vec![contact_tuple];
+        
+        let plan = ContactPlan {
+            realnodes: nodes,
+            vnodes: vec![],
+            contacts: contacts,
+        };
+
+        make_guard!(id);
+        let graph = Multigraph::new(id, plan).unwrap();
+
+        let tx_ref = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::R(r) => r,
+            _ => panic!("Expected RNodeRef"),
+        };
+        let rx_ref = match graph.node_id_ref(1.into()).unwrap() {
+            NodeRef::R(r) => r,
+            _ => panic!("Expected RNodeRef"),
+        };
+
+        let contacts_iter = graph.iter_contacts(tx_ref, rx_ref).map(|c_ref| {
+            let contact = &graph[c_ref];
+            let nm = &graph[rx_ref].manager;
+            (rx_ref, nm, c_ref, contact)
+        });
+        
+        // Must simulate a relay scenario so the processing delay is taken into account
+        let prev_frag = PathFragment {
+            via: None,
+            hop_count: 0,
+            arrival_time: crate::types::TimeInterval { start: 0, end: 0 },
+            rx_node: tx_ref,
+        };
+
+        let result = try_make_hop(
+            &graph,
+            (&prev_frag, 0),
+            &bundle,
+            tx_ref,
+            contacts_iter,
+            Some(tx_ref), // Simulate relay to trigger processing delay
+            rx_ref.into(),
+        );
+
+        assert!(
+            result.is_some(),
+            "TEST FAILED: Expected Some even with node processing delay."
+        );
+        let route = result.unwrap();
+        
+        // Expected arrival: 
+        // Base time (0) + Proc Delay (2) = Send Time (2)
+        // Tx Duration: Size(100) / Rate(100) = 1
+        // Contact Delay = 1
+        // Arrival = Send Time(2) + Duration(1) + Delay(1) = 4
+        assert_eq!(
+            route.arrival_time.end, 4,
+            "TEST FAILED: Arrival should account for the 2s node processing delay (expected 4, got {}).",
+            route.arrival_time.end
+        );
+    }
+
+    #[test]
+    fn test_best_contact_selected_1_hop() {
+        let graph_str = "node 0 A node 1 B
+                            contact 0 1 0 50 100 5
+                            contact 0 1 0 200 100 2
+                            contact 0 1 10 100 50 1
+                            contact 0 1 20 30 100 1";
+        let bundle = make_bundle(1, 100, 2000);
+                            
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let graph = Multigraph::new(id, contact_plan).unwrap();
+
+        let mut refs = Vec::new();
+        for i in 0..2 { 
+            if let Ok(NodeRef::R(re)) = graph.node_id_ref(i.into()) {
+                refs.push(re)
+            } else {
+                panic!("Node {} missing", i)
+            }
+        }
+        
+        let contacts_iter = graph.iter_contacts(refs[0], refs[1]).map(|c_ref| {
+            let contact = &graph[c_ref];
+            let rx_rnode_ref = refs[1]; 
+            let nm = &graph[rx_rnode_ref].manager;
+            (rx_rnode_ref, nm, c_ref, contact)
+        });
+
+        // run the hop, simulating that the bundle is ready to be sent at t=5
+        let result = run_hop::<Finder, _, _>(
+            &graph,
+            &bundle,
+            refs[0],
+            refs[1],
+            5, // The bundle is available at Node A at t=5
+            contacts_iter,
+        );
+
+        assert!(
+            result.is_some(),
+            "TEST FAILED: Expected Some, at least one contact should be valid."
+        );
+        let route = result.unwrap();
+
+        // Contact 2 should have been selected
+        // Send time = max(bundle_arrival=5, contact_start=0) = 5
+        // Tx Duration = size(100) / rate(100) = 1
+        // Delay = 2
+        // Arrival = 5 + 1 + 2 = 8
+        assert_eq!(
+            route.arrival_time.end, 8,
+            "TEST FAILED: Expected arrival 8 from the optimal contact (got {}).",
+            route.arrival_time.end
+        );
+        assert_eq!(
+            route.hop_count, 1,
+            "TEST FAILED: Expected hop_count = 1 (got {}).",
+            route.hop_count
+        );
+        assert!(
+            route.via.is_some(),
+            "TEST FAILED: Expected a ViaHop to be set."
+        );
+    }
+
+    #[test]
+    fn test_best_contact_selected_2_hops() {
+        // Setup a 3-node graph using the string format
+        // Node 0 -> Node 1 (Hop 1)
+        // Contact A (delay 1) and Contact B (delay 5)
+        // Node 1 -> Node 2 (Hop 2)
+        // Contact C (delay 1, converted from 0.5) and Contact D (delay 2)
+        let graph_str = "node 0 A node 1 B node 2 C
+                            contact 0 1 0 200 100 1
+                            contact 0 1 0 200 100 5
+                            contact 1 2 0 1000 100 1
+                            contact 1 2 0 1000 100 2";
+
+        let bundle = make_bundle(1, 100, 2000);
+
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let graph = Multigraph::new(id, contact_plan).unwrap();
+
+        let mut refs = Vec::new();
+        // Extract Node 0, Node 1, and Node 2
+        for i in 0..3 { 
+            if let Ok(NodeRef::R(re)) = graph.node_id_ref(i.into()) {
+                refs.push(re)
+            } else {
+                panic!("Node {} missing", i)
+            }
+        }
+
+        // hop 1
+        let contacts_iter_1 = graph.iter_contacts(refs[0], refs[1]).map(|c_ref| {
+            let contact = &graph[c_ref];
+            let nm = &graph[refs[1]].manager;
+            (refs[1], nm, c_ref, contact)
+        });
+
+        // Hop 1 originates at Node 0 at time 0
+        let hop1 = run_hop::<Finder, _, _>(
+            &graph,
+            &bundle,
+            refs[0],
+            refs[1],
+            0,
+            contacts_iter_1,
+        ).expect("TEST FAILED: Hop 1 should succeed.");
+
+        // Verification hop 1
+        // Tx Duration = 100 / 100 = 1. Delay = 1 (Contact A). Arrival = 2.
+        assert_eq!(
+            hop1.arrival_time.end, 2,
+            "Hop 1 FAILED: Expected arrival 2 (got {}).",
+            hop1.arrival_time.end
+        );
+        assert_eq!(
+            hop1.hop_count, 1,
+            "Hop 1 FAILED: Expected hop_count = 1 (got {}).",
+            hop1.hop_count
+        );
+
+        // hop 2
+        let contacts_iter_2 = graph.iter_contacts(refs[1], refs[2]).map(|c_ref| {
+            let contact = &graph[c_ref];
+            let nm = &graph[refs[2]].manager;
+            (refs[2], nm, c_ref, contact)
+        });
+
+        // We call try_make_hop directly to pass hop1 as the previous fragment
+        // It acts as a relay from Node 1 to Node 2.
+        let hop2 = try_make_hop(
+            &graph,
+            (&hop1, 0), // Pass the previous fragment and its theoretical index
+            &bundle,
+            refs[1], // Current node is Node 1
+            contacts_iter_2,
+            Some(refs[0]), // Previous node was Node 0
+            refs[2].into(),
+        ).expect("TEST FAILED: Hop 2 should succeed.");
+
+        // Verification Hop 2
+        // Start time = Hop 1 Arrival = 2
+        // Tx Duration = 100 / 100 = 1. Delay = 1 (Contact C). Arrival = 2 + 1 + 1 = 4.
+        assert_eq!(
+            hop2.arrival_time.end, 4,
+            "Hop 2 FAILED: Expected arrival 4 (got {}).",
+            hop2.arrival_time.end
+        );
+        assert_eq!(
+            hop2.hop_count, 2,
+            "Hop 2 FAILED: Expected hop_count = 2 (got {}).",
+            hop2.hop_count
+        );
+        assert!(
+            hop2.via.is_some(),
+            "Hop 2 FAILED: Expected a ViaHop to be set."
+        );
+    }
+
+    #[test]
+    fn test_to_node_equals_receiver_vertex_id() {
+        let graph_str = "node 0 A node 1 B
+                            contact 0 1 0 200 100 1";
+        
+        let bundle = make_bundle(1, 50, 1000);
+                            
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let graph = Multigraph::new(id, contact_plan).unwrap();
+
+        let mut refs = Vec::new();
+        for i in 0..2 { 
+            if let Ok(NodeRef::R(re)) = graph.node_id_ref(i.into()) {
+                refs.push(re)
+            } else {
+                panic!("Node {} missing", i)
+            }
+        }
+        
+        let contacts_iter = graph.iter_contacts(refs[0], refs[1]).map(|c_ref| {
+            let contact = &graph[c_ref];
+            let rx_rnode_ref = refs[1]; 
+            let nm = &graph[rx_rnode_ref].manager;
+            (rx_rnode_ref, nm, c_ref, contact)
+        });
+
+        let result = run_hop::<Finder, _, _>(
+            &graph,
+            &bundle,
+            refs[0],
+            refs[1],
+            0,
+            contacts_iter,
+        );
+
+        let route = result.expect("Expected a valid hop");
+        
+        // verify that it matches our exact receiver node reference
+        assert_eq!(
+            route.rx_node, refs[1],
+            "rx_node should exactly match the receiver RNodeRef"
+        );
+        
+        // If we strictly want to check the ID as an integer just to be absolutely sure
+        let rx_id: usize = route.rx_node.into();
+        assert_eq!(
+            rx_id, 1,
+            "rx_node ID should be 1, got {}",
+            rx_id
+        );
+    }
+}
