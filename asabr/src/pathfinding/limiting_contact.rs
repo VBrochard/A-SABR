@@ -125,11 +125,14 @@ impl<'id, P: Pathfinding<'id, NM, CM, RoutableNodeRef<'id>>, NM: NodeManager, CM
         for ct in suppressions.iter() {
             multigraph[ct].suppressed = false
         }
-        if let Ok(Some(path)) = &r
-            && let Some(to_suppress) =
+        if let Ok(Some(path)) = &r {
+            if let Some(to_suppress) =
                 get_next_to_suppress(multigraph, path, *destination, self.function)
-        {
-            suppressions.push(to_suppress);
+            {
+                suppressions.push(to_suppress);
+            } else {
+                return Ok(None);
+            }
         }
 
         r
