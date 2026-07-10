@@ -15,7 +15,7 @@ pub fn benchmark(c: &mut Criterion) {
     let bundle = Bundle {
         source,
         priority: 0,
-        size: 474195330,
+        size: 4_900_000,
         expiration: 24060,
     };
     let curr_time = 60;
