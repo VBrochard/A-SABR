@@ -113,6 +113,17 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
             last: Some(graph.routable_to_usize(destination)),
         })
     }
+    pub fn commit_path_to(
+        &self,
+        destination: RoutableNodeRef<'id>,
+        bundle: &Bundle,
+        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+    ) -> Result<Option<PathFragment<'id>>, ASABRError> {
+        match self.full_path_rev(destination, graph) {
+            None => Ok(None),
+            Some(path) => path.commit(bundle, graph),
+        }
+    }
     pub fn into_owned<'b>(self) -> PathFindingOutput<'id, 'b> {
         let vec = self.as_vec();
         PathFindingOutput {
