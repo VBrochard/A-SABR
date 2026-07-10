@@ -6,6 +6,7 @@ use crate::{
     multigraph::{INodeRef, Multigraph, NodeRef, RoutableNodeRef, VNodeRef},
     node_manager::NodeManager,
     pathfinding::PathFindingOutput,
+    paths::PathFragment,
     types::Date,
 };
 use alloc::{boxed::Box, rc::Rc};
@@ -34,6 +35,13 @@ pub trait Destination<'id> {
         &self,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> Option<usize>;
+    type RoutingOutput;
+    fn route(
+        &mut self,
+        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+        bundle: &Bundle,
+        route: PathFindingOutput<'id, '_>,
+    ) -> Result<Option<Self::RoutingOutput>, ASABRError>;
 }
 
 pub enum Dest<'id> {
@@ -123,6 +131,15 @@ impl<'id> Destination<'id> for Dest<'id> {
             Dest::MultiCast(..) => None,
         }
     }
+    type RoutingOutput = ();
+    fn route(
+        &mut self,
+        _graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+        _bundle: &Bundle,
+        _route: PathFindingOutput<'id, '_>,
+    ) -> Result<Option<Self::RoutingOutput>, ASABRError> {
+        todo!()
+    }
 }
 
 impl<'id> From<INodeRef<'id>> for Dest<'id> {
@@ -198,6 +215,15 @@ impl<'id> Destination<'id> for INodeRef<'id> {
     ) -> Option<usize> {
         Some((*self).into())
     }
+    type RoutingOutput = PathFragment<'id>;
+    fn route(
+        &mut self,
+        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+        bundle: &Bundle,
+        route: PathFindingOutput<'id, '_>,
+    ) -> Result<Option<Self::RoutingOutput>, ASABRError> {
+        route.commit_path_to((*self).into(), bundle, graph)
+    }
 }
 
 impl<'id> Destination<'id> for VNodeRef<'id> {
@@ -229,6 +255,15 @@ impl<'id> Destination<'id> for VNodeRef<'id> {
         _graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> Option<usize> {
         Some((*self).into())
+    }
+    type RoutingOutput = PathFragment<'id>;
+    fn route(
+        &mut self,
+        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+        bundle: &Bundle,
+        route: PathFindingOutput<'id, '_>,
+    ) -> Result<Option<Self::RoutingOutput>, ASABRError> {
+        route.commit_path_to((*self).into(), bundle, graph)
     }
 }
 
@@ -264,6 +299,15 @@ impl<'id> Destination<'id> for RoutableNodeRef<'id> {
     ) -> Option<usize> {
         Some(graph.routable_to_usize(*self))
     }
+    type RoutingOutput = PathFragment<'id>;
+    fn route(
+        &mut self,
+        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+        bundle: &Bundle,
+        route: PathFindingOutput<'id, '_>,
+    ) -> Result<Option<Self::RoutingOutput>, ASABRError> {
+        route.commit_path_to(*self, bundle, graph)
+    }
 }
 
 pub struct All;
@@ -296,5 +340,14 @@ impl Destination<'_> for All {
         _graph: &Multigraph<'_, impl NodeManager, impl ContactManager>,
     ) -> Option<usize> {
         None
+    }
+    type RoutingOutput = ();
+    fn route(
+        &mut self,
+        _graph: &mut Multigraph<'_, impl NodeManager, impl ContactManager>,
+        _bundle: &Bundle,
+        _route: PathFindingOutput<'_, '_>,
+    ) -> Result<Option<Self::RoutingOutput>, ASABRError> {
+        todo!()
     }
 }

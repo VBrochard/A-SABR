@@ -170,6 +170,25 @@ impl<
     }
 }
 
+impl<
+    'id,
+    S: PathsStorage<'id, NM, CM, D>,
+    P: Pathfinding<'id, NM, CM, D>,
+    NM: NodeManager,
+    CM: ContactManager,
+    D: Destination<'id>,
+    A,
+    B,
+> From<(&Multigraph<'id, NM, CM>, (A, B))> for Cached<'id, S, P, NM, CM, D>
+where
+    for<'a> (&'a Multigraph<'id, NM, CM>, A): Into<S>,
+    for<'a> (&'a Multigraph<'id, NM, CM>, B): Into<P>,
+{
+    fn from(value: (&Multigraph<'id, NM, CM>, (A, B))) -> Self {
+        Self::new((value.0, value.1.0).into(), (value.0, value.1.1).into())
+    }
+}
+
 /// A Guard to avoid searching a path when useless. Bundles prio will be capped at prio_count (set to 1 to ignore bundles priorities)
 #[derive(Debug, Default)]
 pub struct Guard<'id, D: Destination<'id>, const PRIO_COUNT: usize> {
@@ -246,6 +265,24 @@ impl<
         }
     }
 }
+
+impl<
+    'id,
+    P: Pathfinding<'id, NM, CM, D>,
+    NM: NodeManager,
+    CM: ContactManager,
+    D: Destination<'id>,
+    T,
+    const PC: usize,
+> From<(&Multigraph<'id, NM, CM>, T)> for Guarded<'id, PC, P, D, NM, CM>
+where
+    for<'a> (&'a Multigraph<'id, NM, CM>, T): Into<P>,
+{
+    fn from(value: (&Multigraph<'id, NM, CM>, T)) -> Self {
+        Self::new(value.into())
+    }
+}
+
 impl<
     'id,
     const PRIO_COUNT: usize,

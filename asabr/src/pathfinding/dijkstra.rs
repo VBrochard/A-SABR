@@ -190,3 +190,11 @@ impl<W, D> Disktra<W, D> {
         }
     }
 }
+
+impl<W, D, NM: NodeManager, CM: ContactManager> From<(&Multigraph<'_, NM, CM>, ())>
+    for Disktra<W, D>
+{
+    fn from(_value: (&Multigraph<'_, NM, CM>, ())) -> Self {
+        Self::new()
+    }
+}

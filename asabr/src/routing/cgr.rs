@@ -108,3 +108,26 @@ impl<
         }
     }
 }
+
+impl<
+    'id,
+    NM: NodeManager,
+    CM: ContactManager,
+    P: Pathfinding<'id, NM, CM, D>,
+    D: Destination<'id>,
+    S: PathsStorage<'id, NM, CM, D>,
+    A,
+    B,
+> From<(&Multigraph<'id, NM, CM>, (A, B))> for Cgr<'id, NM, CM, P, S, D>
+where
+    for<'a> (&'a Multigraph<'id, NM, CM>, A): Into<P>,
+    for<'a> (&'a Multigraph<'id, NM, CM>, B): Into<S>,
+{
+    fn from(value: (&Multigraph<'id, NM, CM>, (A, B))) -> Self {
+        Self::new(
+            (value.0, value.1.0).into(),
+            (value.0, value.1.1).into(),
+            value.0,
+        )
+    }
+}

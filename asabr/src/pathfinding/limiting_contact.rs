@@ -93,6 +93,7 @@ impl<'id, P: Pathfinding<'id, NM, CM, RoutableNodeRef<'id>>, NM: NodeManager, CM
         }
     }
 }
+
 impl<'id, P: Pathfinding<'id, NM, CM, RoutableNodeRef<'id>>, NM: NodeManager, CM: ContactManager>
     Pathfinding<'id, NM, CM, RoutableNodeRef<'id>> for Suppressor<'id, P, NM, CM>
 {
@@ -136,5 +137,43 @@ impl<'id, P: Pathfinding<'id, NM, CM, RoutableNodeRef<'id>>, NM: NodeManager, CM
         }
 
         r
+    }
+}
+
+impl<'id, P: Pathfinding<'id, NM, CM, RoutableNodeRef<'id>>, NM: NodeManager, CM: ContactManager, T>
+    From<(
+        &Multigraph<'id, NM, CM>,
+        (fn(&Contact<CM>, &Contact<CM>) -> Ordering, T),
+    )> for Suppressor<'id, P, NM, CM>
+where
+    for<'a> (&'a Multigraph<'id, NM, CM>, T): Into<P>,
+{
+    fn from(
+        value: (
+            &Multigraph<'id, NM, CM>,
+            (
+                for<'a, 'b> fn(&'a Contact<CM>, &'b Contact<CM>) -> Ordering,
+                T,
+            ),
+        ),
+    ) -> Self {
+        Self::new((value.0, value.1.1).into(), value.1.0, value.0)
+    }
+}
+impl<'id, P: Pathfinding<'id, NM, CM, RoutableNodeRef<'id>>, NM: NodeManager, CM: ContactManager>
+    From<(
+        &Multigraph<'id, NM, CM>,
+        fn(&Contact<CM>, &Contact<CM>) -> Ordering,
+    )> for Suppressor<'id, P, NM, CM>
+where
+    for<'a> (&'a Multigraph<'id, NM, CM>, ()): Into<P>,
+{
+    fn from(
+        value: (
+            &Multigraph<'id, NM, CM>,
+            fn(&Contact<CM>, &Contact<CM>) -> Ordering,
+        ),
+    ) -> Self {
+        (value.0, (value.1, ())).into()
     }
 }

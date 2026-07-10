@@ -8,6 +8,7 @@ use crate::{
     bundle::Bundle,
     contact_manager::ContactManager,
     errors::ASABRError,
+    multigraph::Multigraph,
     node_manager::NodeManager,
     pathfinding::{PathFindingOutput, destination::Destination},
     types::{Date, Priority},
@@ -31,6 +32,14 @@ impl<'id, NM: NodeManager, CM: ContactManager> TreeCache<'id, NM, CM> {
             cache: AllocRingBuffer::new(capacity),
             _phantom_nm: PhantomData,
         }
+    }
+}
+
+impl<'id, NM: NodeManager, CM: ContactManager> From<(&Multigraph<'id, NM, CM>, usize)>
+    for TreeCache<'id, NM, CM>
+{
+    fn from(value: (&Multigraph<'id, NM, CM>, usize)) -> Self {
+        Self::new(value.0, value.1)
     }
 }
 

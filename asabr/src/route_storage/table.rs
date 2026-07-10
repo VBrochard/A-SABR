@@ -39,6 +39,13 @@ impl<'id, D: Destination<'id>> RoutingTable<'id, D> {
         }
     }
 }
+impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>>
+    From<(&Multigraph<'id, NM, CM>, ())> for RoutingTable<'id, D>
+{
+    fn from(_value: (&Multigraph<'id, NM, CM>, ())) -> Self {
+        Self::new()
+    }
+}
 
 impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage<'id, NM, CM, D>
     for RoutingTable<'id, D>
