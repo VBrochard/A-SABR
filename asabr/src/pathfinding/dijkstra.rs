@@ -95,7 +95,9 @@ pub fn dijkstra<
             let (current_node, iter_r, iter_v) = multigraph.iter_iter_contacts(node, prune_time);
 
             for (neighbor, _, contacts) in iter_r {
-                if !work_area.node_check(RoutableNodeRef::I(neighbor), multigraph) {
+                if multigraph[neighbor].info.excluded
+                    || !work_area.node_check(RoutableNodeRef::I(neighbor), multigraph)
+                {
                     continue;
                 }
                 if let Some(path) = try_make_hop(
@@ -126,7 +128,9 @@ pub fn dijkstra<
                         (&path, viaref),
                         bundle,
                         node,
-                        contacts.map(|(rre, rno, ctre, ct)| (rre, &rno.manager, ctre, ct)),
+                        contacts
+                            .filter(|(_, rno, ..)| !rno.info.excluded)
+                            .map(|(rre, rno, ctre, ct)| (rre, &rno.manager, ctre, ct)),
                         previous_node,
                         multigraph.vnode_id(vnoderef),
                     )
