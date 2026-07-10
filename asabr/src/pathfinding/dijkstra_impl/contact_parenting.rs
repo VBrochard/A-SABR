@@ -124,13 +124,10 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
 
     fn node_check(
         &mut self,
-        node: RoutableNodeRef<'id>,
-        graph: &Multigraph<'id, NM, CM>,
+        _node: RoutableNodeRef<'id>,
+        _graph: &Multigraph<'id, NM, CM>,
     ) -> bool {
-        match node {
-            RoutableNodeRef::I(inode) => !graph[inode].info.excluded,
-            RoutableNodeRef::V(_) => true, // VNodes are virtual, no direct exclusion
-        }
+        true
     }
     fn poped_relevant_new(
         &mut self,

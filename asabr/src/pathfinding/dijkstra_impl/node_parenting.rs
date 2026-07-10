@@ -74,15 +74,7 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
     }
     #[inline(always)]
     fn node_check(&mut self, node: RoutableNodeRef<'id>, graph: &Multigraph<'id, NM, CM>) -> bool {
-        // We only check unvisited nodes that are NOT excluded from the graph
-        let is_visited = self.visited[graph.routable_to_usize(node)];
-        
-        let is_excluded = match node {
-            RoutableNodeRef::I(inode) => graph[inode].info.excluded,
-            RoutableNodeRef::V(_) => false, // Vnodes are virtual, usually not directly excluded in this logic
-        };
-
-        !is_visited && !is_excluded
+        !self.visited[graph.routable_to_usize(node)]
     }
     fn poped_relevant_new(
         &mut self,
@@ -151,7 +143,7 @@ mod tests {
 
         let mut algo_hop = NodeParenting::<Hop>::new();
         let mut dest = DestAll;
-        
+
         let res_hop = algo_hop
             .find_path(&mut graph, 0, ref_0.into(), &bundle, &mut dest, None)?
             .expect("Hop: Routing Failed!");
@@ -163,7 +155,7 @@ mod tests {
 
         let mut algo_sabr = NodeParenting::<SABR>::new();
         let mut dest_sabr = DestAll;
-        
+
         let res_sabr = algo_sabr
             .find_path(&mut graph, 0, ref_0.into(), &bundle, &mut dest_sabr, None)?
             .expect("SABR: Routing Failed!");
@@ -251,8 +243,8 @@ mod tests {
         let bundle = make_bundle(2, 100, 2000);
 
         let mut algo_hop = NodeParenting::<Hop>::new();
-        let mut dest = Dest::INode(ref_2); 
-        
+        let mut dest = Dest::INode(ref_2);
+
         let res_hop = algo_hop
             .find_path(&mut graph, 0, ref_0.into(), &bundle, &mut dest, None)?
             .expect("Hop: Routing Failed!");
@@ -455,7 +447,7 @@ mod tests {
         let e_idx: usize = 4;
         assert!(res[e_idx].is_some(), "Real node E(4) should be reachable");
         let path_to_e = res[e_idx].as_ref().unwrap();
-        
+
         assert_eq!(
             path_to_e.arrival_time.end, 4,
             "Should pick the faster path through E (arrival 4)"
@@ -464,7 +456,7 @@ mod tests {
         let c_idx: usize = 2;
         assert!(res[c_idx].is_some(), "Real node C(2) should be reachable");
         let path_to_c = res[c_idx].as_ref().unwrap();
-        
+
         assert_eq!(
             path_to_c.arrival_time.end, 6,
             "Path to C is slower (arrival 6)"
@@ -507,7 +499,7 @@ mod tests {
         // Targeted search should resolve to the optimal node within the VNode
         let e_idx: usize = 4;
         assert!(res[e_idx].is_some(), "Real node E(4) should be the chosen path for the VNode");
-        
+
         let path_to_e = res[e_idx].as_ref().unwrap();
         assert_eq!(
             path_to_e.arrival_time.end, 4,
