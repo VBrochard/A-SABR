@@ -160,20 +160,19 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM>> DijkstraWork
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::contact_manager::legacy::evl::EVLManager;
+    use crate::contact_plan::asabr_file_lexer::parse_from_iter;
     use crate::distance::hop::Hop;
     use crate::distance::sabr::SABR;
+    use crate::multigraph::NodeRef;
     use crate::node_manager::none::NoManagement;
     use crate::pathfinding::ASABRError;
     use crate::pathfinding::test_helpers::*;
-    use crate::multigraph::NodeRef;
     use crate::pathfinding::{Dest, DestAll, Pathfinding};
     use generativity::make_guard;
-    use crate::contact_plan::asabr_file_lexer::parse_from_iter;
 
     #[test]
     fn test_a_to_c_tree() -> Result<(), ASABRError> {
@@ -186,8 +185,14 @@ mod tests {
         make_guard!(id);
         let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-        let ref_0 = match graph.node_id_ref(0.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
-        let ref_2 = match graph.node_id_ref(2.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let ref_2 = match graph.node_id_ref(2.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
         let bundle = make_bundle(2, 100, 2000);
 
@@ -226,11 +231,17 @@ mod tests {
         make_guard!(id);
         let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-        let ref_1 = match graph.node_id_ref(1.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
+        let ref_1 = match graph.node_id_ref(1.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
         let real_ref_1: crate::multigraph::RealNodeRef = ref_1.into();
         graph.mark_excluded(&[real_ref_1]);
 
-        let ref_0 = match graph.node_id_ref(0.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
         let bundle = make_bundle(2, 100, 2000);
 
@@ -241,7 +252,10 @@ mod tests {
             .expect("Hop: Routing Failed!");
 
         assert!(res_hop[1].is_none(), "Hop: Node B should be excluded");
-        assert!(res_hop[2].is_none(), "Hop: Node C should not be accessible without B");
+        assert!(
+            res_hop[2].is_none(),
+            "Hop: Node C should not be accessible without B"
+        );
 
         let mut algo_sabr = ContactParenting::<NoManagement, EVLManager, SABR>::new();
         let mut dest_sabr = DestAll;
@@ -250,7 +264,10 @@ mod tests {
             .expect("SABR: Routing Failed!");
 
         assert!(res_sabr[1].is_none(), "SABR: Node B should be excluded");
-        assert!(res_sabr[2].is_none(), "SABR: Node C should not be accessible without B");
+        assert!(
+            res_sabr[2].is_none(),
+            "SABR: Node C should not be accessible without B"
+        );
 
         Ok(())
     }
@@ -266,12 +283,21 @@ mod tests {
         make_guard!(id);
         let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-        let ref_1 = match graph.node_id_ref(1.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
+        let ref_1 = match graph.node_id_ref(1.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
         let real_ref_1: crate::multigraph::RealNodeRef = ref_1.into();
         graph.mark_excluded(&[real_ref_1]);
 
-        let ref_0 = match graph.node_id_ref(0.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
-        let ref_2 = match graph.node_id_ref(2.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let ref_2 = match graph.node_id_ref(2.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
         let bundle = make_bundle(2, 100, 2000);
 
@@ -280,14 +306,20 @@ mod tests {
         let res_hop = algo_hop
             .find_path(&mut graph, 0, ref_0.into(), &bundle, &mut dest, None)?
             .expect("Hop: Routing Failed!");
-        assert!(res_hop[2].is_none(), "Hop: Node C should not be accessible without B");
+        assert!(
+            res_hop[2].is_none(),
+            "Hop: Node C should not be accessible without B"
+        );
 
         let mut algo_sabr = ContactParenting::<NoManagement, EVLManager, SABR>::new();
         let mut dest_sabr = Dest::INode(ref_2);
         let res_sabr = algo_sabr
             .find_path(&mut graph, 0, ref_0.into(), &bundle, &mut dest_sabr, None)?
             .expect("SABR: Routing Failed!");
-        assert!(res_sabr[2].is_none(), "SABR: Node C should not be accessible without B");
+        assert!(
+            res_sabr[2].is_none(),
+            "SABR: Node C should not be accessible without B"
+        );
 
         Ok(())
     }
@@ -306,7 +338,10 @@ mod tests {
         make_guard!(id);
         let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-        let ref_0 = match graph.node_id_ref(0.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
         let bundle = make_bundle(2, 100, 2000);
 
@@ -317,7 +352,10 @@ mod tests {
             .expect("Hop: Routing Failed!");
 
         let path_hop = res_hop[2].as_ref().unwrap();
-        assert_eq!(path_hop.arrival_time.end, 11, "Hop: Expected arrival 11 via direct path");
+        assert_eq!(
+            path_hop.arrival_time.end, 11,
+            "Hop: Expected arrival 11 via direct path"
+        );
         assert_eq!(path_hop.hop_count, 1, "Hop: Expected 1 hop");
 
         let mut algo_sabr = ContactParenting::<NoManagement, EVLManager, SABR>::new();
@@ -327,7 +365,10 @@ mod tests {
             .expect("SABR: Routing Failed!");
 
         let path_sabr = res_sabr[2].as_ref().unwrap();
-        assert_eq!(path_sabr.arrival_time.end, 4, "SABR: Expected arrival 4 via B");
+        assert_eq!(
+            path_sabr.arrival_time.end, 4,
+            "SABR: Expected arrival 4 via B"
+        );
         assert_eq!(path_sabr.hop_count, 2, "SABR: Expected 2 hops");
 
         Ok(())
@@ -346,8 +387,14 @@ mod tests {
         make_guard!(id);
         let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-        let ref_0 = match graph.node_id_ref(0.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
-        let ref_3 = match graph.node_id_ref(3.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let ref_3 = match graph.node_id_ref(3.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
         let bundle = make_bundle(3, 0, 1000);
 
@@ -370,14 +417,18 @@ mod tests {
 
         let path_sabr = res_sabr[dest_id].as_ref().unwrap();
         assert_eq!(path_sabr.arrival_time.end, 30, "SABR: Expected arrival 30");
-        assert_eq!(path_sabr.hop_count, 2, "SABR: Expected 2 hops for contact graph tie-break");
+        assert_eq!(
+            path_sabr.hop_count, 2,
+            "SABR: Expected 2 hops for contact graph tie-break"
+        );
 
         Ok(())
     }
 
     #[test]
     fn test_exemple_2() -> Result<(), ASABRError> {
-        let graph_str = "node 0 source node 1 from_C0 node 2 from_C2_C1 node 3 from_C3 node 4 from_C4
+        let graph_str =
+            "node 0 source node 1 from_C0 node 2 from_C2_C1 node 3 from_C3 node 4 from_C4
                          contact 0 1 0 10 1 0
                          contact 0 2 25 35 1 0
                          contact 1 2 10 23 1 0
@@ -389,8 +440,14 @@ mod tests {
         make_guard!(id);
         let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-        let ref_0 = match graph.node_id_ref(0.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
-        let ref_4 = match graph.node_id_ref(4.into()).unwrap() { NodeRef::I(r) => r, _ => panic!() };
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let ref_4 = match graph.node_id_ref(4.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
         let bundle = make_bundle(4, 0, 1000);
 
