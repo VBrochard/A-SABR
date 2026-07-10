@@ -48,7 +48,6 @@ impl<
     ) -> Result<Option<crate::pathfinding::PathFindingOutput<'id, '_>>, ASABRError> {
         // Concurent uses of copy validated by polonius
         let copy = &raw mut self.storage;
-
         if let ret @ (Ok(Some(_)) | Err(_)) = unsafe { copy.as_mut_unchecked() }.select(
             bundle,
             destination,

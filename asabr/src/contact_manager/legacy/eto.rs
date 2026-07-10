@@ -42,7 +42,13 @@ mod tests {
         };
         for i in 0..20 {
             assert!(
-                manager.schedule_tx(ti, C_START, &bp0(1000)).is_some(),
+                manager
+                    .schedule_tx(
+                        ti,
+                        manager.dry_run_tx(ti, C_START, &bp0(1000)).unwrap(),
+                        &bp0(1000)
+                    )
+                    .is_ok(),
                 "TEST FAILED: ETO schedule_tx should never saturate (call {}).",
                 i + 1
             );
@@ -57,8 +63,9 @@ mod tests {
             end: C_END,
         };
         let bundle = bp0(1000);
-        let first = manager.schedule_tx(ti, C_START, &bundle);
-        let second = manager.schedule_tx(ti, C_START, &bundle);
+        let first = manager.dry_run_tx(ti, C_START, &bundle);
+        let _ = manager.schedule_tx(ti, first.unwrap(), &bundle);
+        let second = manager.dry_run_tx(ti, C_START, &bundle);
 
         assert_eq!(
             first, second,

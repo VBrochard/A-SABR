@@ -8,6 +8,7 @@ use crate::types::Volume;
 use crate::{
     bundle::Bundle,
     contact::ContactInfo,
+    errors::ASABRError,
     types::{Date, TimeInterval},
 };
 
@@ -46,12 +47,12 @@ pub trait ContactManager {
 
     /// Schedule the transmission of a bundle based on the contact data and available free intervals.
     ///
-    /// This method shall be called after a dry run ! Implementations might not ensure a clean behavior otherwise.
+    /// This method shall be called after a dry run, passing the tx_data obtained from it. this proper usage should never error.
     ///
     /// # Arguments
     ///
     /// * `contact_data` - Reference to the contact information (unused in this implementation).
-    /// * `at_time` - The current time for scheduling purposes.
+    /// * `tx_data` - transmission and reception window obtained by dry run.
     /// * `bundle` - The bundle to be transmitted.
     ///
     /// # Returns
@@ -60,9 +61,9 @@ pub trait ContactManager {
     fn schedule_tx(
         &mut self,
         contact_lifespan: TimeInterval,
-        at_time: Date,
+        tx_data: ContactManagerTxData,
         bundle: &Bundle,
-    ) -> Option<ContactManagerTxData>;
+    ) -> Result<(), ASABRError>;
 
     /// For first depleted compatibility. Required with "first_depleted" compilation feature.
     ///
@@ -127,10 +128,10 @@ impl<T: AsMut<dyn ContactManager> + AsRef<dyn ContactManager>> ContactManager fo
     fn schedule_tx(
         &mut self,
         contact_lifespan: TimeInterval,
-        at_time: Date,
+        tx_data: ContactManagerTxData,
         bundle: &Bundle,
-    ) -> Option<ContactManagerTxData> {
-        self.as_mut().schedule_tx(contact_lifespan, at_time, bundle)
+    ) -> Result<(), ASABRError> {
+        self.as_mut().schedule_tx(contact_lifespan, tx_data, bundle)
     }
 
     /// Delegates the try_init method to the boxed object.
@@ -176,10 +177,10 @@ macro_rules! transparent_CM {
             fn schedule_tx(
                 &mut self,
                 contact_lifespan: $crate::types::TimeInterval,
-                at_time: $crate::types::Date,
+                tx_data: $crate::contact_manager::ContactManagerTxData,
                 bundle: &$crate::bundle::Bundle,
-            ) -> Option<$crate::contact_manager::ContactManagerTxData> {
-                self.0.schedule_tx(contact_lifespan, at_time, bundle)
+            ) -> core::result::Result<(), $crate::errors::ASABRError> {
+                self.0.schedule_tx(contact_lifespan, tx_data, bundle)
             }
 
             fn try_init(&mut self, contact_data: &$crate::contact::ContactInfo) -> bool {

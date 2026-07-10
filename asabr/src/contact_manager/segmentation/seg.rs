@@ -7,6 +7,7 @@ use crate::{
         ContactManager, ContactManagerTxData,
         segmentation::{BaseSegmentationManager, Segment},
     },
+    errors::ASABRError,
     types::{DataRate, Date, Duration, TimeInterval},
 };
 
@@ -141,55 +142,39 @@ impl ContactManager for SegmentationManager {
     fn schedule_tx(
         &mut self,
         _contact_data: TimeInterval,
-        at_time: Date,
-        bundle: &Bundle,
-    ) -> Option<ContactManagerTxData> {
-        let mut tx_start = 0;
-        let mut index = 0;
-        let mut tx_end = 0;
+        tx_data: ContactManagerTxData,
+        _bundle: &Bundle,
+    ) -> Result<(), ASABRError> {
+        let tx_start = tx_data.tx_window.start;
+        let tx_end = tx_data.tx_window.end;
 
-        for free_seg in &self.free_intervals {
-            if free_seg.end < at_time {
-                continue;
-            }
-            tx_start = Date::max(free_seg.start, at_time);
-            if let Some(tx_end_res) =
-                super::get_tx_end(&self.rate_intervals, tx_start, bundle.size, free_seg.end)
-            {
-                tx_end = tx_end_res;
-                break;
-            }
-            index += 1;
-        }
+        let index = self
+            .free_intervals
+            .binary_search_by_key(&tx_start, |seg| seg.start)
+            .unwrap_or_else(|err| err - 1);
 
-        let interval = &mut self.free_intervals[index];
-        let expiration = interval.end;
-        let (d_start, d_end) = super::get_delays(tx_start, tx_end, &self.delay_intervals);
+        let interval = self
+            .free_intervals
+            .get_mut(index)
+            .ok_or(ASABRError::ScheduleError("Illegal tx_data"))?;
 
         if interval.start != tx_start {
+            let old_end = interval.end;
             interval.end = tx_start;
-            self.free_intervals.insert(
-                index + 1,
-                Segment {
-                    start: tx_end,
-                    end: expiration,
-                    val: (),
-                },
-            )
+            if interval.end != tx_end {
+                self.free_intervals.insert(
+                    index + 1,
+                    Segment {
+                        start: tx_end,
+                        end: old_end,
+                        val: (),
+                    },
+                )
+            }
         } else {
             interval.start = tx_end;
         }
-
-        Some(ContactManagerTxData {
-            tx_window: TimeInterval {
-                start: tx_start,
-                end: tx_end,
-            },
-            rx_window: TimeInterval {
-                start: tx_start + d_start,
-                end: tx_end + d_end,
-            },
-        })
+        Ok(())
     }
 
     /// Initializes the segmentation manager by checking that rate and delay intervals have no gaps.
@@ -297,29 +282,13 @@ mod tests {
 
             // If it should succeed -> test schedule_tx too
             if *expect_success {
-                let schedule_tx_res = manager.schedule_tx(contact_info.into(), *at_time, bundle);
+                let schedule_tx_res =
+                    manager.schedule_tx(contact_info.into(), dry_run_res.unwrap(), bundle);
 
                 assert!(
-                    schedule_tx_res.is_some(),
+                    schedule_tx_res.is_ok(),
                     "TEST N°{i} FAILED: schedule_tx failed unexpectedly."
                 );
-
-                assert_eq!(
-                    dry_run_res.is_some(),
-                    schedule_tx_res.is_some(),
-                    "TEST N°{i} FAILED: dry_run_tx and schedule_tx do not match."
-                );
-
-                if let (Some(dry), Some(sched)) = (dry_run_res, schedule_tx_res) {
-                    assert_eq!(
-                        dry.tx_window, sched.tx_window,
-                        "TEST N°{i} FAILED: tx_window mismatch."
-                    );
-                    assert_eq!(
-                        dry.rx_window, sched.rx_window,
-                        "TEST N°{i} FAILED: rx_window mismatch."
-                    );
-                }
             }
         }
 

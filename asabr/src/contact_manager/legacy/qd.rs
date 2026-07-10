@@ -44,7 +44,8 @@ mod tests {
             end: C_END,
         };
 
-        manager.schedule_tx(ti, C_START, &bp0(2000)).unwrap();
+        let tx_data = manager.dry_run_tx(ti, C_START, &bp0(2000)).unwrap();
+        manager.schedule_tx(ti, tx_data, &bp0(2000)).unwrap();
 
         let data = manager.dry_run_tx(ti, C_START, &bp0(100)).unwrap();
         assert_eq!(
@@ -61,7 +62,8 @@ mod tests {
             end: C_END,
         };
 
-        manager.schedule_tx(ti, C_START, &bp0(2000)).unwrap();
+        let tx_data = manager.dry_run_tx(ti, C_START, &bp0(2000)).unwrap();
+        manager.schedule_tx(ti, tx_data, &bp0(2000)).unwrap();
 
         let data = manager.dry_run_tx(ti, 5, &bp0(100)).unwrap();
         assert_eq!(
@@ -77,7 +79,8 @@ mod tests {
             start: C_START,
             end: C_END,
         };
-        manager.schedule_tx(ti, C_START, &bp0(9900)).unwrap();
+        let tx_data = manager.dry_run_tx(ti, C_START, &bp0(9900)).unwrap();
+        manager.schedule_tx(ti, tx_data, &bp0(9900)).unwrap();
         assert!(
             manager.dry_run_tx(ti, C_START, &bp0(200)).is_none(),
             "TEST FAILED: Bundle should not fit when queue shift pushes tx_end past contact end."

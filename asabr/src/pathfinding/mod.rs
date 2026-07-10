@@ -5,7 +5,7 @@ use core::ops::{Deref, DerefMut};
 
 use crate::bundle::Bundle;
 use crate::contact::Contact;
-use crate::contact_manager::ContactManager;
+use crate::contact_manager::{ContactManager, ContactManagerTxData};
 use crate::errors::ASABRError;
 use crate::multigraph::{ContactRef, INodeRef, Multigraph, RealNodeRef, RoutableNodeRef};
 use crate::node_manager::NodeManager;
@@ -113,6 +113,17 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
             last: Some(graph.routable_to_usize(destination)),
         })
     }
+    pub fn commit_path_to(
+        &self,
+        destination: RoutableNodeRef<'id>,
+        bundle: &Bundle,
+        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+    ) -> Result<Option<PathFragment<'id>>, ASABRError> {
+        match self.full_path_rev(destination, graph) {
+            None => Ok(None),
+            Some(path) => path.commit(bundle, graph),
+        }
+    }
     pub fn into_owned<'b>(self) -> PathFindingOutput<'id, 'b> {
         let vec = self.as_vec();
         PathFindingOutput {
@@ -212,6 +223,61 @@ impl<'id, 'a, 'b> Iterator for PathIterator<'id, 'a, 'b> {
             self.last = Some(hop.parent_frag)
         }
         Some(frag)
+    }
+}
+
+impl<'id, 'a, 'b> PathIterator<'id, 'a, 'b> {
+    /// Commit a single destination path, and return the PathFragment of the first hop, or the first error.
+    pub fn commit(
+        self,
+        bundle: &Bundle,
+        multigraph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+    ) -> Result<Option<PathFragment<'id>>, ASABRError> {
+        let mut iter = self.peekable();
+        let Some(mut last) = iter.next() else {
+            return Ok(None);
+        };
+        let Some(prev) = iter.peek() else {
+            return Ok(None);
+        };
+
+        multigraph[last.rx_node].manager.commit(
+            bundle,
+            last.arrival_time,
+            // Not the last => only internal node
+            unsafe { prev.rx_node.internal().unwrap_unchecked() }.into(),
+            &[],
+        )?;
+        while let Some(curr) = iter.next() {
+            // Not the first => via exist
+            let last_via = unsafe { last.via.unwrap_unchecked() };
+            let contact = &mut multigraph[last_via.contact];
+            contact.manager.schedule_tx(
+                contact.lifespan,
+                ContactManagerTxData {
+                    tx_window: last_via.tx_time,
+                    rx_window: last.arrival_time,
+                },
+                bundle,
+            )?;
+
+            if let Some(prev) = iter.peek() {
+                let last_nodeid = multigraph.into_nodeid(last.rx_node.into());
+                // Not the last => only internal node
+                multigraph[unsafe { curr.rx_node.internal().unwrap_unchecked() }]
+                    .manager
+                    .commit(
+                        bundle,
+                        curr.arrival_time,
+                        // Not the last => only internal node
+                        unsafe { prev.rx_node.internal().unwrap_unchecked().into() },
+                        // Not the first => via exist
+                        &[(last_via.tx_time, last_nodeid)],
+                    )?;
+                last = curr;
+            }
+        }
+        Ok(Some(last))
     }
 }
 
