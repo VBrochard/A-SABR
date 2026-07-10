@@ -4,7 +4,7 @@
 ### Run the example
 
 ```bash
-cargo run --example dijkstra_accuracy 
+cargo run --example dijkstra_accuracy
 ```
 
 ### Scenarios
