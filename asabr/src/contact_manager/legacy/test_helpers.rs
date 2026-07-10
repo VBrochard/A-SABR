@@ -113,11 +113,13 @@ macro_rules! generate_common_tests {
             let mut manager_sched = ($manager_fn)();
             let ti = $crate::types::TimeInterval{start:C_START, end:C_END};
             let bundle = bp0(100);
-            assert_eq!(
-                manager_dry.dry_run_tx(ti, C_START, &bundle),
-                manager_sched.schedule_tx(ti, C_START, &bundle),
-                "TEST FAILED: schedule_tx and dry_run_tx should return identical timings on a fresh manager."
+            let tx_data = manager_dry.dry_run_tx(ti,C_START, &bundle);
+            if tx_data.is_some() {
+            assert!(
+                manager_sched.schedule_tx(ti, tx_data.unwrap(), &bundle).is_ok(),
+                "TEST FAILED: schedule_tx should guarantee Ok() result on copy."
             );
+            }
         }
 
         #[test]
@@ -149,14 +151,17 @@ macro_rules! generate_auto_update_tests {
                 end: C_END,
             };
             for i in 0..10 {
+                let tx_data = manager.dry_run_tx(ti, C_START, &bp0(1000));
+
                 assert!(
-                    manager.schedule_tx(ti, C_START, &bp0(1000)).is_some(),
+                    tx_data.is_some(),
                     "TEST FAILED: Expected Some on schedule {} of 10.",
                     i + 1
                 );
+                let _ = manager.schedule_tx(ti, tx_data.unwrap(), &bp0(1000));
             }
             assert!(
-                manager.schedule_tx(ti, C_START, &bp0(1)).is_none(),
+                manager.dry_run_tx(ti, C_START, &bp0(1)).is_none(),
                 "TEST FAILED: Expected None after volume is fully saturated."
             );
         }
@@ -168,10 +173,12 @@ macro_rules! generate_auto_update_tests {
                 start: C_START,
                 end: C_END,
             };
+            let tx_data = manager.dry_run_tx(ti, C_START, &bp2(5000));
             assert!(
-                manager.schedule_tx(ti, C_START, &bp2(5000)).is_some(),
+                tx_data.is_some(),
                 "TEST FAILED: Expected Some scheduling p2 bundle."
             );
+            let _ = manager.schedule_tx(ti, tx_data.unwrap(), &bp2(5000));
             assert!(
                 manager.dry_run_tx(ti, C_START, &bp0(5000)).is_some(),
                 "TEST FAILED: Expected Some for p0 bundle within remaining p0 budget."
@@ -195,10 +202,12 @@ macro_rules! generate_auto_update_tests {
                 start: C_START,
                 end: C_END,
             };
+            let tx_data = manager.dry_run_tx(ti, C_START, &bp1(5000));
             assert!(
-                manager.schedule_tx(ti, C_START, &bp1(5000)).is_some(),
+                tx_data.is_some(),
                 "TEST FAILED: Expected Some scheduling p1 bundle."
             );
+            let _ = manager.schedule_tx(ti, tx_data.unwrap(), &bp1(5000));
             assert!(
                 manager.dry_run_tx(ti, C_START, &bp0(5001)).is_none(),
                 "TEST FAILED: Expected None for p0 -> p1 cascade should have consumed p0 budget."
@@ -255,10 +264,12 @@ macro_rules! generate_budget_auto_update_tests {
                 start: C_START,
                 end: C_END,
             };
+            let tx_data = manager.dry_run_tx(ti, C_START, &bp0(BUDGET_P0));
             assert!(
-                manager.schedule_tx(ti, C_START, &bp0(BUDGET_P0)).is_some(),
+                tx_data.is_some(),
                 "TEST FAILED: Expected Some scheduling p0 bundle up to its budget."
             );
+            let _ = manager.schedule_tx(ti, tx_data.unwrap(), &bp0(BUDGET_P0));
             assert!(
                 manager.dry_run_tx(ti, C_START, &bp0(1)).is_none(),
                 "TEST FAILED: Expected None -> p0 budget should be exhausted."

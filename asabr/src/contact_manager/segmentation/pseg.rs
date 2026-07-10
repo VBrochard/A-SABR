@@ -7,6 +7,7 @@ use crate::{
         ContactManager, ContactManagerTxData,
         segmentation::{BaseSegmentationManager, Segment},
     },
+    errors::ASABRError,
     types::{DataRate, Date, Duration, Priority, TimeInterval},
 };
 
@@ -159,13 +160,12 @@ impl ContactManager for PSegmentationManager {
     /// Optionally returns `ContactManagerTxData` with transmission start and end times, or `None` if the bundle can't be transmitted.
     fn schedule_tx(
         &mut self,
-        contact_lifespan: TimeInterval,
-        at_time: Date,
+        _contact_lifespan: TimeInterval,
+        tx_data: ContactManagerTxData,
         bundle: &Bundle,
-    ) -> Option<ContactManagerTxData> {
-        let out = self.dry_run_tx(contact_lifespan, at_time, bundle)?;
-        let tx_start = out.tx_window.start;
-        let tx_end = out.tx_window.end;
+    ) -> Result<(), ASABRError> {
+        let tx_start = tx_data.tx_window.start;
+        let tx_end = tx_data.tx_window.end;
 
         let mut i = 0;
         while i < self.booking.len() {
@@ -212,7 +212,7 @@ impl ContactManager for PSegmentationManager {
             i += 1;
         }
 
-        Some(out)
+        Ok(())
     }
 
     /// For first depleted compatibility
@@ -301,16 +301,14 @@ mod tests {
 
         for (i, (bundle, at_time, expect_success)) in requests.iter().enumerate() {
             let dry_run_res = manager.dry_run_tx(contact_info.into(), *at_time, bundle);
-            let schedule_tx_res = manager.schedule_tx(contact_info.into(), *at_time, bundle);
-
+            if let Some(tx_data) = &dry_run_res {
+                let _ = manager.schedule_tx(contact_info.into(), *tx_data, bundle);
+            }
             assert_eq!(
-                dry_run_res, schedule_tx_res,
-                "TEST N°{i} FAILED: dry_run and schedule_tx doesn't match.\n",
-            );
-            let is_some = schedule_tx_res.is_some();
-            assert_eq!(
-                is_some, *expect_success,
-                "TEST N°{i} FAILED: expected: {expect_success} actual: {is_some}",
+                dry_run_res.is_some(),
+                *expect_success,
+                "TEST N°{i} FAILED: expected: {expect_success} actual: {}",
+                dry_run_res.is_some()
             );
         }
 

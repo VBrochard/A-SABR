@@ -42,9 +42,10 @@ mod tests {
             end: C_END,
         };
         let before = manager.dry_run_tx(ti, C_START, &bp0(1000)).unwrap();
-        manager.schedule_tx(ti, C_START, &bp0(1000)).unwrap();
-        manager.schedule_tx(ti, C_START, &bp0(1000)).unwrap();
-        manager.schedule_tx(ti, C_START, &bp0(1000)).unwrap();
+        for _ in 0..3 {
+            let tx_data = manager.dry_run_tx(ti, C_START, &bp0(1000)).unwrap();
+            manager.schedule_tx(ti, tx_data, &bp0(1000)).unwrap();
+        }
 
         let after = manager.dry_run_tx(ti, C_START, &bp0(1000)).unwrap();
 

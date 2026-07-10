@@ -2,6 +2,7 @@ use crate::{
     bundle::Bundle,
     contact::ContactInfo,
     contact_manager::{ContactManager, ContactManagerTxData},
+    errors::ASABRError,
     parsing::{LexFrom, Parse},
     types::{DataRate, Date, Duration, TimeInterval, Volume},
 };
@@ -224,17 +225,16 @@ impl<const ADD_DELAY: bool, const AUTO_UPDATE: bool, const PRIO_COUNT: usize, co
 
     fn schedule_tx(
         &mut self,
-        contact_data: TimeInterval,
-        at_time: Date,
+        _contact_data: TimeInterval,
+        _tx_data: ContactManagerTxData,
         bundle: &Bundle,
-    ) -> Option<ContactManagerTxData> {
-        let data = self.dry_run_tx(contact_data, at_time, bundle)?;
+    ) -> Result<(), ASABRError> {
         // Conditionally update queue size based on $auto_update
         // Can overflow with overbooking
         if AUTO_UPDATE {
             self.0.enqueue(bundle);
         }
-        Some(data)
+        Ok(())
     }
 
     fn try_init(&mut self, contact_data: &ContactInfo) -> bool {
