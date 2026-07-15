@@ -1,11 +1,8 @@
 extern crate alloc;
 
 use crate::parse_single_tok;
-use alloc::{collections::BTreeMap as HashMap, string::String, vec::Vec};
+use alloc::string::String;
 use core::{fmt::Display, marker::PhantomData, str::FromStr};
-
-/// Represents a HashMap with node IDs as keys and node ID lists as values
-pub type NodeIDMap = HashMap<NodeID, Vec<NodeID>>;
 
 /// Represents the unique inner identifier for a node.
 /// Abstract struct actually implementing from/to usize in order

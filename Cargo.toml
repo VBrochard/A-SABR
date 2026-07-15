@@ -1,3 +1,10 @@
 [workspace]
 resolver = "3"
 members = ["asabr", "asabr_macro"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+# opt-level = 'z'
+# debug = false
+# panic = "abort"

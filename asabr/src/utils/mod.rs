@@ -19,29 +19,6 @@ use crate::{
 /// Re-exports generativity utilities used by graph-construction macros.
 pub use generativity::{Guard, Id, make_guard};
 
-/// Compact representation of an optional `usize`.
-///
-/// `None` is encoded as `usize::MAX`; all other values are encoded directly.
-pub struct OptUsize(usize);
-
-impl From<Option<usize>> for OptUsize {
-    fn from(value: Option<usize>) -> Self {
-        match value {
-            None => OptUsize(usize::MAX),
-            Some(v) => OptUsize(v),
-        }
-    }
-}
-
-impl From<OptUsize> for Option<usize> {
-    fn from(value: OptUsize) -> Self {
-        match value.0 {
-            usize::MAX => None,
-            v => Some(v),
-        }
-    }
-}
-
 /// Builds a `Multigraph` from ASABR contact-plan content.
 ///
 /// This macro creates a generativity guard, parses the contact plan, and binds
