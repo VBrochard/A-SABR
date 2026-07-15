@@ -1,4 +1,4 @@
-// #![no_std]
+#![no_std]
 
 //! A-SABR routing library.
 //!
