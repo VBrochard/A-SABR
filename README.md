@@ -7,19 +7,28 @@ Current version is a beta release (contact olivier.de-jonckere@lirmm.fr for more
 
 ## Description
 
-The A-SABR project provides a framework to instantiate routing algorithms from research activities up to operational contexts. This project was developed after the experience gathered from CGR at the Jet Propulsion Laboratory and the scalability research around Schedule-Aware Bundle Routing (SABR)'s scalability with SPSN at the University of Dresden.
+The A-SABR project provides a framework to instantiate routing algorithms from research activities
+up to operational contexts. This project was developed after the experience gathered from CGR at the
+Jet Propulsion Laboratory and the scalability research around Schedule-Aware Bundle Routing (SABR)'s
+scalability with SPSN at the University of Dresden.
 
 
-
-**For researchers:** this framework aims to allow further routing algorithm development and benchmarking with a level of quality as close as possible to operational requirements.
-
-
-
-**For operators:** built in Rust, the framework aims to reach the new recommendations regarding the use of memory-safe languages for future space missions. A-SABR uses polymorphism for composition and enforces the best performance whenever possible (by templating) and dynamic modularity if necessary (with dynamic dispatch), to compose its routing algorithms. Either directly compiled with the wanted component, or used as an inspiration to derive the future routing algorithm, A-SABR aims to accelerate the adoption of SABR in future operational activities.
+**For researchers:** this framework aims to allow further routing algorithm development
+and benchmarking with a level of quality as close as possible to operational requirements.
 
 
+**For operators:** built in Rust, the framework aims to reach the new recommendations regarding
+the use of memory-safe languages for future space missions. A-SABR uses polymorphism for composition
+and enforces the best performance whenever possible (by templating) and dynamic modularity if necessary
+(with dynamic dispatch), to compose its routing algorithms. Either directly compiled with the wanted component,
+or used as an inspiration to derive the future routing algorithm, A-SABR aims to accelerate the adoption
+of SABR in future operational activities.
 
-**Built for flexibility and extensibility:** A-SABR is designed to exchange and add easily the building blocks of a routing algorithm. In some cases, variability can be desirable at runtime, in this case, multiple building block variations of the same type can be used simultaneously. For example, the earliest-transmission opportunity feature of SABR is applicable to the first hops, while the queue-delay feature takes over for the other hops.
+
+**Built for flexibility and extensibility:** A-SABR is designed to exchange and add easily the building blocks
+of a routing algorithm. In some cases, variability can be desirable at runtime, in this case, multiple building
+block variations of the same type can be used simultaneously. For example, the earliest-transmission opportunity
+feature of SABR is applicable to the first hops, while the queue-delay feature takes over for the other hops.
 
 
 
@@ -29,7 +38,7 @@ The exchangeable building blocks are :
 
 - Node resource management (e.g. processing, energy, transmission queues)
 
-- Pathfinding algorithms (e.g. route construction and alternative route construction)
+- Pathfinding algorithms (e.g. bare dijkstra, crg, spsn)
 
 - Path storage (e.g. shortest-path trees, routes)
 
@@ -37,55 +46,33 @@ The exchangeable building blocks are :
 
 - Distance calculation (e.g. SABR distance)
 
-- Routing algorithms mainframes (e.g. CGR, SPSN)
 
 
+## Classicals Pathfindings algorithms
 
+It is possible to use custom combination of pathfinding algorithms and distances, but some classical combinations have been given names in
+pathfinding::alias.
 
-## Mainframes and pathfinding
+Each combination name is the concatenation of the Algorithm Name, Variant, Dijkstra impl, and eventually "Hop" to change from the default SABR distance to an
+hop-first distance.
 
-| **Algorithm Name**         | **Short Name**      | **Distance** | **Alternative Pathfinding** | **Dijkstra Variant** |
-|--------------------------|--------|--------------|------------------------------|------------------------|
-| SpsnHybridParenting | SpsnHp                          | Sabr         | N/A                | HybridParenting                    |
-| SpsnNodeParenting | SpsnNp                    | Sabr         | N/A                | NodeParenting              |
-| SpsnContactParenting | SpsnCp                 | Sabr         | N/A                | ContactParenting           |
-| CgrFirstEndingHybridParenting | CgrFeHp               | Sabr         | FirstEnding                  | HybridParenting                    |
-| CgrFirstDepletedHybridParenting | CgrFdHp             | Sabr         | FirstDepleted                | HybridParenting                    |
-| CgrFirstEndingNodeParenting | CgrFeNp         | Sabr         | FirstEnding                  | NodeParenting              |
-| CgrFirstDepletedNodeParenting | CgrFdNp       | Sabr         | FirstDepleted                | NodeParenting              |
-| CgrFirstEndingContactParenting | CgrFeCp      | Sabr         | FirstEnding                  | ContactParenting           |
-| CgrFirstDepletedContactParenting | CgrFdCp    | Sabr         | FirstDepleted                | ContactParenting           |
-| SpsnHybridParentingHop | SpsnHpHop                       | Hop          | N/A                | HybridParenting                    |
-| SpsnNodeParentingHop | SpsnNpHop                | Hop          | N/A                | NodeParenting              |
-| SpsnContactParentingHop | SpsnCpHop             | Hop          | N/A                | ContactParenting           |
-| CgrFirstEndingHybridParentingHop | CgrFeHpHop            | Hop          | FirstEnding                  | HybridParenting                    |
-| CgrFirstDepletedHybridParentingHop | CgrFdHpHop          | Hop          | FirstDepleted                | HybridParenting                    |
-| CgrFirstEndingNodeParentingHop | CgrFeNpHop      | Hop          | FirstEnding                  | NodeParenting              |
-| CgrFirstDepletedNodeParentingHop | CgrFdNpHop    | Hop          | FirstDepleted                | NodeParenting              |
-| CgrFirstEndingContactParentingHop | CgrFeCpHop   | Hop          | FirstEnding                  | ContactParenting           |
-| CgrFirstDepletedContactParentingHop | CgrFdCpHop | Hop          | FirstDepleted                | ContactParenting           |
-| VolCgrHybridParenting | VolCgrHp                        | Sabr         | N/A                | HybridParenting                    |
-| VolCgrNodeParenting | VolCgrNp                 | Sabr         | N/A                | NodeParenting              |
-| VolCgrContactParenting | VolCgrCp              | Sabr         | N/A                | ContactParenting           |
-| VolCgrHybridParentingHop | VolCgrHpHop                    | Hop          | N/A                | HybridParenting                    |
-| VolCgrNodeParentingHop | VolCgrNpHop              | Hop          | N/A                | NodeParenting              |
-| VolCgrContactParentingHop | VolCgrCpHop           | Hop          | N/A                | ContactParenting           |
+### Available algorithms:
+- Spsn (Recommended): Work on shortest-path tree for the whole graph, and consider bundle metrics to create them to avoid multiple tree computation.
+  - No Variants
+- VolCgr: Work on shortest-paths directly, and consider bundle metrics to create them to avoid multiple tree computation.
+  - No Variants
+- Cgr: Try to construct paths without considering bundle metrics, blacklisting contacts on the computed path one by one as long as it does not work.
+  - FirstDepleted: The blacklisted contact is the one with least initial capacity
+  - FirstEnding: The blacklisted contact is the one which stop existing first
 
-The Spsn based algorithms create shortest-path trees rather than single destination paths and consider the bundle metrics (priority and size) during tree computation to ensure at most one tree computation per bundle. A tree can be reused as long as the bundles to schedule show less constraining metrics (e.g. lower priority and smaller size) in comparison to the bundle metrics that were used to construct the present tree.
+### Available disjkstra implementations (Can be used directly):
+- HybridParenting (Recommended) : Explore for each node, but allow re-exploring for non-yet-optimal paths. Most accurate, and fast in most practical cases.
+- ContactParenting : Explore the best path to each contact in the graph. Slowest
+- NodeParenting : Explore only the best path to each node in the graph. The fastest but less accurate
 
-The Cgr based algorithms create single destination routes and do not consider the bundle metrics for path computation. Several path constructions might be required for a single bundle scheduling and they rely more extensively on route selection (as expected by the SABR standard).
-
-The VolCgr based algorithms replace the alternative pathfinding approach with volume (and priority) aware search.
-
-The algorithms are based on 3 pathfinding techniques (each of them declined in single-destination and shortest-path tree variants) :
-- NodeParenting (or NodeGraph): Dijkstra with node to node tracking. Implementation mapping to the theoretical framework where nodes are vertices.
-- ContactParenting (or ContactGraph): Dijkstra with contact to contact tracking, as in CGR. Implementation mapping to the theoretical framework where contacts are vertices.
-- HybridParenting : Dijkstra with contact to contact tracking, tracking of multiple paths to individual node instead of direct overriding, and node based filtering.
-
-And 2 alternative path strategies (for the Cgr mainframe):
-
-- FirstEnding : Suppress first ending contact of the last found route before next computation.
-- FirstDepleted : Suppress the contact with the smallest original volume limit before the next computation.
+### Distances
+- SABR (Recommended, not specified in the aliases): Lexicographical order on (time,number of hop,expiration)
+- Hop : Lexicographical order on (number of hop,time). May be faster to calculate best routes for
 
 ## Quick starts
 
@@ -94,8 +81,6 @@ This project includes several example programs demonstrating key features:
 - **Contact Plans**: See [`examples/contact_plans/`](examples/contact_plans/) for contact plan formats and parsing.
 
 - **Dijkstra Accuracy**: See [`examples/dijkstra_accuracy/`](examples/dijkstra_accuracy/) for the implementation of Dijkstra's algorithm accuracy tests.
-
-- **Bundle Processing**: Check out [`examples/bundle_processing/`](examples/bundle_processing/) for bundle processing logic and related test cases.
 
 - **ETO Management**: Explore [`examples/eto_management/`](examples/eto_management/) for managing Earliest Transmission Opportunity in the context of the library.
 
@@ -110,31 +95,26 @@ A contact plan either provides "static" or "dynamic" contacts, referring to the 
 
 ## Contact management
 
-10 volume management techniques are available.
+11 volume management techniques are available.
 
 #### Legacy
 
-The first 9 approaches are similar enough to be generated with a unique macro. A "P" prefix means "with priority", and the "PB" prefix "with priorities and budgets". Budgeted priorities allow limiting the maximal volume that can be booked for a given priority level. The approaches listed below are already generated. The macro can be leveraged to create variants with a higher priority level count.
-
-| **Manager** |**priority<br>levels** | **priority<br>budget** |
-|-------------|---------------------|--------------------------------|
-| EVLManager                                                   | 0                     | N/A                     |
-| PEVLManager                                                  | 3                       | no                      |
-| PBEVLManager                                                | 3                       | yes                     |
-| ETOManager                                           | 0                     | N/A                     |
-| PETOManager                                           | 3                       | no                      |
-| PBETOManager                                         | 3                       | yes                     |
-| QDManager                                     | 0                    | N/A                     |
-| PQDManager                                    | 3                       | no                      |
-| PBQDManager                                   | 3                       | yes                     |
+3 Management technique, each with tree variants:
 
 
+- [P|PB]EVLmanager (Effective Volume Limit): tracking of the residual total volume of the contact.
 
-- [P|PB]EVLmanager (Effective Volume Limit): tracking of the residual volume of the contacts.
-
-- [P|PB]ETOmanager (Earliest Transmission Opportunity, for first hop contacts only): tracking of the transmission queue with a neighboring node. `IMPORTANT:` Real queue access would require huge coupling with the BPA, instead, manual queueing/dequeueing should be performed.
+- [P|PB]ETOmanager (Earliest Transmission Opportunity, for first hop contacts only): tracking of the transmission queue with a neighboring node.
+    `IMPORTANT:` Real queue access would require huge coupling with the BPA, instead, manual queueing/dequeueing should be performed to mirror the action on the real queue.
 
 - [P|PB]QDManager (Queue Delay, an ETO variant for the next hops): tracking of the residual volume of the contacts, adds a delay for the earliest transmission opportunity from the contact start time depending on the booked volume (alternative to ETOManager for contacts that do not present the local node as transmitter).
+
+"P" prefix means "with priority", and the "PB" prefix "with priorities and budgets per priority".
+Budgeted priorities allow limiting the maximal volume that can be booked for a given priority level.
+
+The P and PB variants use a maximum priority of 3, (any more will be considered as priority level 3).
+
+If a different number of priority is desired, use `contact_manager::legacy::Legacy` directly.
 
 The contact plan format will change for the budgeted versions.
 ```
@@ -144,17 +124,25 @@ contact <from> <to> <start> <end> [marker] <rate> <delay>
 # A-SABR CP Format for EVL/ETO/QD with priority (3 levels) **and** budget (with marker if dynamic)
 contact <from> <to> <start> <end> [marker] <rate> <delay> <bugdet_1> <bugdet_2> <bugdet_3>
 ```
+
 #### Contact Segmentation
 
-The SegmentationManager tracks accurately the interval of bandwidth availability & utilization. It is suitable for any contact and can replace EVL, ETO and QD. When replacing ETO for segmentation, the performance is highly dependent on the contact plan accuracy, where ETO can be reactive to inaccuracies. In opposition to other approaches, a single logical contact can show different rates on different sub-intervals, where the physical contact would be split in 2 logical contacts for the legacy approaches. If a physical contact is split in two, a large bundle cannot overlap the two logical contacts during pathfinding/selection.
+The [P]SegmentationManager tracks accurately the interval of bandwidth availability & utilization.
+
+It is suitable for any contact and can replace EVL, ETO and QD.
+When replacing ETO for segmentation, the performance is highly dependent on the contact plan accuracy, where ETO can be reactive to inaccuracies.
+In opposition to other approaches, a single logical contact can show different rates on different sub-intervals, where the physical contact would
+be split in 2 logical contacts for the legacy approaches. If a physical contact is split in two, a large bundle cannot overlap the two logical
+contacts during pathfinding/selection.
+
+The P variant is priority aware.
 
 ```
 # A-SABR CP format for a segmented contact showing 2 intervals with different data rates
 # but a single delay for its whole duration (with marker if dynamic)
 contact <from> <to> <start> <end> [marker]
-rate <start> <end> <rate>
-rate <start> <end> <rate>
-delay <start> <end> <delay>
+rate [<start> <end> <rate>, ...(repeat) ]
+delay [ <start> <end> <delay>, ...(repeat) ]
 ```
 
 ## References
