@@ -16,7 +16,7 @@ use a_sabr::pathfinding::{HybridParenting, Pathfinding};
 use a_sabr::route_storage::Cached;
 use a_sabr::{
     bundle::Bundle, errors::ASABRError, node_manager::none::NoManagement,
-    route_storage::cache::TreeCache, routing::aliases::SpsnHybridParenting,
+    pathfinding::top_level::aliases::SpsnHybridParenting, route_storage::cache::TreeCache,
 };
 use generativity::make_guard;
 
@@ -50,7 +50,6 @@ fn main() -> Result<(), ASABRError> {
 
     // We will route a bundle
     let b = Bundle {
-        source: 0.into(),
         priority: 0,
         size: 1,
         expiration: 10000,

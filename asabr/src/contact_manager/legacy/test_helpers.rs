@@ -19,7 +19,6 @@ pub(crate) fn make_contact_info(start: Date, end: Date) -> ContactInfo {
 
 pub(crate) fn make_bundle(size: Volume, priority: i8) -> Bundle {
     Bundle {
-        source: 0.into(),
         priority,
         size,
         expiration: 99999,

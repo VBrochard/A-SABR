@@ -136,7 +136,6 @@ pub(crate) fn make_contact(
 
 pub(crate) fn make_bundle(priority: i8, size: i64, expiration: Date) -> Bundle {
     Bundle {
-        source: 0usize.into(),
         priority,
         size,
         expiration,

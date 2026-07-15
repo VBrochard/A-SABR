@@ -23,6 +23,7 @@ pub use destination::{All as DestAll, Dest};
 pub mod limiting_contact;
 #[cfg(test)]
 mod test_helpers;
+pub mod top_level;
 
 /// Data structure that holds the results of a pathfinding operation.
 ///
@@ -365,6 +366,14 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
     previous_node: Option<INodeRef<'id>>,
     neigbhoor_id: NodeID,
 ) -> Option<PathFragment<'id>> {
+    struct Best<'id> {
+        contact: ContactRef<'id>,
+        receive: TimeInterval,
+        dest: RealNodeRef<'id>,
+        send: TimeInterval,
+        expiration: Date,
+    }
+
     let send_time = match previous_node {
         None => last_hop.0.arrival_time.end,
         Some(tx_node) => graph[current_node].manager.delay(
@@ -383,17 +392,11 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
         }
         true
     });
-    //                    Selected contact, rx_time,     dest node,        tx_time
-    let mut best: Option<(
-        ContactRef<'id>,
-        TimeInterval,
-        RealNodeRef<'id>,
-        TimeInterval,
-    )> = None;
+    let mut best: Option<Best<'id>> = None;
 
     for (next_node_ref, next_node_manager, ctref, ct) in suppressed {
-        if let Some((_, time, _, _)) = best
-            && time.end <= ct.as_ref().lifespan.start
+        if let Some(Best { receive, .. }) = best
+            && receive.end <= ct.as_ref().lifespan.start
         {
             break;
         }
@@ -403,8 +406,8 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
                 .manager
                 .dry_run_tx(ct.as_ref().lifespan, send_time, bundle)
         {
-            if let Some((_, time, _, _)) = best
-                && time.end < txdata.rx_window.end
+            if let Some(Best { receive, .. }) = best
+                && receive.end < txdata.rx_window.end
             {
                 continue;
             }
@@ -424,20 +427,35 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
                 //Maybe replace that with the node returning a window of possible send time
                 break;
             }
-            best = Some((ctref, txdata.rx_window, next_node_ref, txdata.tx_window))
+            best = Some(Best {
+                contact: ctref,
+                receive: txdata.tx_window,
+                dest: next_node_ref,
+                send: txdata.tx_window,
+                expiration: ct.as_ref().lifespan.end,
+            })
         }
     }
 
-    best.map(|(ct_ref, time, receiver, tx_window)| PathFragment {
-        via: Some(ViaHop {
-            contact: ct_ref,
-            parent_frag: last_hop.1,
-            tx_time: tx_window,
-        }),
-        hop_count: last_hop.0.hop_count + 1,
-        rx_node: receiver,
-        arrival_time: time,
-    })
+    best.map(
+        |Best {
+             contact,
+             receive,
+             dest,
+             send,
+             expiration,
+         }| PathFragment {
+            via: Some(ViaHop {
+                contact,
+                parent_frag: last_hop.1,
+                tx_time: send,
+            }),
+            hop_count: last_hop.0.hop_count + 1,
+            rx_node: dest,
+            arrival_time: receive,
+            expiration: expiration.min(last_hop.0.expiration),
+        },
+    )
 }
 
 #[cfg(test)]
@@ -469,15 +487,7 @@ mod tests {
         contacts: impl Iterator<Item = (RealNodeRef<'id>, &'a NM, ContactRef<'id>, &'a Contact<CM>)>,
     ) -> Option<PathFragment<'id>> {
         // Keep the initial fragment alive for the duration of the try_make_hop call to satisfy borrow checker lifetime constraints
-        let prev_frag = PathFragment {
-            via: None,
-            hop_count: 0,
-            arrival_time: TimeInterval {
-                start: send_time,
-                end: send_time,
-            },
-            rx_node: current_node.into(),
-        };
+        let prev_frag = PathFragment::new_start(send_time, current_node.into());
 
         try_make_hop(
             graph,
@@ -725,13 +735,7 @@ mod tests {
         });
 
         // Bypass the run_hop helper to manually inject a previous_node
-        let prev_frag = PathFragment {
-            via: None,
-            hop_count: 0,
-            arrival_time: crate::types::TimeInterval { start: 0, end: 0 },
-            rx_node: tx_ref.into(),
-        };
-
+        let prev_frag = PathFragment::new_start(0, tx_ref.into());
         let result = try_make_hop(
             &graph,
             (&prev_frag, 0),
@@ -831,12 +835,7 @@ mod tests {
         });
 
         // Must simulate a relay scenario so the processing delay is taken into account
-        let prev_frag = PathFragment {
-            via: None,
-            hop_count: 0,
-            arrival_time: crate::types::TimeInterval { start: 0, end: 0 },
-            rx_node: tx_ref.into(),
-        };
+        let prev_frag = PathFragment::new_start(0, tx_ref.into());
 
         let result = try_make_hop(
             &graph,

@@ -312,7 +312,6 @@ mod tests {
 
         // Small bundle -> should fit easily
         let bundle1 = Bundle {
-            source: 0usize.into(),
             priority: 1,
             size: 100,
             expiration: 1000,
@@ -324,7 +323,6 @@ mod tests {
 
         // Bigger bundle -> cuts a chunk in the middle
         let bundle2 = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 4000,
             expiration: 1000,
@@ -336,7 +334,6 @@ mod tests {
 
         // Even bigger bundle -> takes a large portion
         let bundle3 = Bundle {
-            source: 0.into(),
             priority: 2,
             size: 5000,
             expiration: 1000,
@@ -347,7 +344,6 @@ mod tests {
 
         // Too large -> should fail and not modify anything
         let bundle_too_large = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 50_000,
             expiration: 1000,
@@ -363,21 +359,18 @@ mod tests {
 
         // We insert multiple bundles sequentially
         let bundle1 = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 1000,
             expiration: 1000,
         };
 
         let bundle2 = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 500,
             expiration: 1000,
         };
 
         let bundle3 = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 1000,
             expiration: 1000,
@@ -404,7 +397,6 @@ mod tests {
         ];
 
         let bundle = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 7500,
             expiration: 1000,
@@ -423,7 +415,6 @@ mod tests {
         let input = vec![InputSeg::Delay(5, 15, 1), InputSeg::Rate(5, 15, 2)];
 
         let bundle = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 4,
             expiration: 1000,

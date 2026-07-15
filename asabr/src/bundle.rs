@@ -1,4 +1,4 @@
-use crate::types::{Date, NodeID, Priority, Volume};
+use crate::types::{Date, Priority, Volume};
 extern crate alloc;
 /// A structure representing a routing bundle containing essential information for pathfinding.
 ///
@@ -6,8 +6,6 @@ extern crate alloc;
 /// in a network, including source and destination nodes, priority, size, and expiration time.
 #[derive(Clone, Debug)]
 pub struct Bundle {
-    /// The starting node identifier for the routing operation.
-    pub source: NodeID,
     /// The priority level of the bundle, used to influence routing decisions.
     pub priority: Priority,
     /// The volume size associated with the bundle, which can affect routing constraints.

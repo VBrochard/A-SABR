@@ -28,8 +28,6 @@ pub mod paths;
 
 ///  Module containing the storage capabilities for the routes.
 pub mod route_storage;
-///  Module containing the routing algorithms.
-pub mod routing;
 
 /// Module containing the logic to read a contact plan.
 pub mod contact_plan;

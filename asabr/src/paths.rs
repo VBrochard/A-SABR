@@ -39,8 +39,8 @@ pub struct PathFragment<'id> {
     pub rx_node: RealNodeRef<'id>,
     // /// The cumulative transmission delay incurred on this path, often used for routing optimizations.
     // pub cumulative_delay: Duration,
-    // /// The time at which this route stage expires, indicating when it is no longer valid.
-    // pub expiration: Date,
+    /// The time after wich any path trough this pathfragment is invalid.
+    pub expiration: Date,
 }
 
 impl<'id> PathFragment<'id> {
@@ -60,6 +60,7 @@ impl<'id> PathFragment<'id> {
         via_hop: Option<ViaHop<'id>>,
         hop_count: HopCount,
         rx_node: RealNodeRef<'id>,
+        expiration: Date,
     ) -> Self {
         Self {
             arrival_time,
@@ -67,7 +68,7 @@ impl<'id> PathFragment<'id> {
             hop_count,
             rx_node,
             // cumulative_delay: 0.0,
-            // expiration: Date::MAX,
+            expiration,
         }
     }
     pub fn new_start(time: Date, node: RealNodeRef<'id>) -> Self {
@@ -79,6 +80,7 @@ impl<'id> PathFragment<'id> {
                 end: time,
             },
             rx_node: node,
+            expiration: Date::MAX,
         }
     }
 }

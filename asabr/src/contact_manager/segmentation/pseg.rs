@@ -326,7 +326,6 @@ mod tests {
     #[test]
     fn test_single_bundle_insertion() {
         let bundle1 = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 100,
             expiration: 1000,
@@ -347,7 +346,6 @@ mod tests {
         //         (0 to 1)                   (1 to 200)
 
         let bundle2 = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 4000,
             expiration: 1000,
@@ -375,7 +373,6 @@ mod tests {
         // =====================================================================
 
         let bundle3 = Bundle {
-            source: 0.into(),
             priority: 2,
             size: 5000,
             expiration: 1000,
@@ -402,7 +399,6 @@ mod tests {
         // =====================================================================
 
         let bundle_too_large = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 50_000,
             expiration: 1000,
@@ -436,19 +432,16 @@ mod tests {
         let input = vec![InputSeg::Delay(0, 200, 4), InputSeg::Rate(0, 200, 100)];
 
         let bundle_prio_1 = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 10000,
             expiration: 1000,
         };
         let bundle_prio_0 = Bundle {
-            source: 0.into(),
             priority: 0,
             size: 1000,
             expiration: 1000,
         };
         let bundle_prio_2 = Bundle {
-            source: 0.into(),
             priority: 2,
             size: 100,
             expiration: 1000,
@@ -505,7 +498,6 @@ mod tests {
         ];
 
         let bundle = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 7500,
             expiration: 1000,
@@ -550,14 +542,12 @@ mod tests {
         let input = vec![InputSeg::Delay(0, 200, 4), InputSeg::Rate(0, 200, 100)];
 
         let bundle_preempted = Bundle {
-            source: 0.into(),
             priority: 1,
             size: 1000,
             expiration: 1000,
         };
 
         let bundle_preempting_large = Bundle {
-            source: 0.into(),
             priority: 2,
             size: 3000,
             expiration: 1000,
@@ -617,7 +607,6 @@ mod tests {
         ];
 
         let bundle = Bundle {
-            source: 0.into(),
             priority: 2,
             size: 1000,
             expiration: 1000,
@@ -678,7 +667,6 @@ mod tests {
         ];
 
         let bundle_low_prio = Bundle {
-            source: 0.into(),
             priority: 0,
             size: 3000,
             expiration: 1000,
@@ -725,7 +713,6 @@ mod tests {
         ];
 
         let bundle_prio2 = Bundle {
-            source: 0.into(),
             priority: 2,
             size: 8000,
             expiration: 1000,

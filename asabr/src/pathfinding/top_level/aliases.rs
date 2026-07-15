@@ -1,12 +1,11 @@
 extern crate alloc;
+use alloc::boxed::Box;
 
-#[allow(unused_imports)]
-use super::cgr::Cgr;
-use super::spsn::Spsn;
 #[cfg(all(feature = "contact_suppression", feature = "first_depleted"))]
 use crate::pathfinding::limiting_contact::had_less_volume_than;
 #[cfg(feature = "contact_suppression")]
 use crate::pathfinding::limiting_contact::{Suppressor, ends_earlier_than};
+
 use crate::{
     contact_manager::ContactManager,
     contact_plan::ContactPlan,
@@ -19,9 +18,9 @@ use crate::{
         dijkstra_impl::{ContactParenting, HybridParenting, NodeParenting},
     },
     route_storage::{Cached, cache::TreeCache, table::RoutingTable},
-    routing::volcgr::VolCgr,
 };
-use alloc::boxed::Box;
+#[allow(unused_imports)]
+use {super::cgr::Cgr, super::spsn::Spsn, super::volcgr::VolCgr};
 
 pub type SpsnHybridParenting<'id, const PRIO_COUNT: usize, NM, CM, D> =
     Spsn<'id, PRIO_COUNT, NM, CM, HybridParenting<'id, SABR, NM, CM>, TreeCache<'id, NM, CM>, D>;
