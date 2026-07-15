@@ -187,243 +187,408 @@ impl<'id, NM: NodeManager, CM: ContactManager, D: Distance<NM, CM> + HybridParen
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use generativity::make_guard;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::contact_manager::legacy::evl::EVLManager;
+    use crate::contact_plan::asabr_file_lexer::parse_from_iter;
+    use crate::distance::hop::Hop;
+    use crate::distance::sabr::SABR;
+    use crate::multigraph::NodeRef;
+    use crate::node_manager::none::NoManagement;
+    use crate::pathfinding::ASABRError;
+    use crate::pathfinding::test_helpers::*;
+    use crate::pathfinding::{Dest, DestAll, Pathfinding};
+    use generativity::make_guard;
 
-//     use super::*;
-//     use crate::contact_manager::legacy::evl::EVLManager;
-//     use crate::distance::hop::Hop;
-//     use crate::distance::sabr::SABR;
-//     use crate::node_manager::none::NoManagement;
-//     use crate::pathfinding::ASABRError;
-//     use crate::pathfinding::test_helpers::*;
+    #[test]
+    fn test_a_to_c_tree() -> Result<(), ASABRError> {
+        let graph_str = "node 0 A node 1 B node 2 C
+                            contact 0 1 0 2000 100 1
+                            contact 1 2 0 2000 100 1";
 
-//     #[test]
-//     fn test_a_to_c_tree() -> Result<(), ASABRError> {
-//         for_test_graph(0, |mg, algo_hop: &mut HybridParenting<true, _, _, Hop>| {
-//             make_guard!(guard);
-//             let mut algo_sabr =
-//                 HybridParenting::<true, NoManagement, EVLManager, SABR>::new(guard, mg);
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-//             let bundle = make_bundle(2, 1, 1.0, 2000);
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let ref_2 = match graph.node_id_ref(2.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
-//             let res_hop = algo_hop
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
+        let bundle = make_bundle(2, 100, 2000);
 
-//             assert_time_hop(&res_hop, 2, 2, 2, "Hop");
+        let mut algo_hop = HybridParenting::<Hop, NoManagement, EVLManager>::new();
+        let mut dest = DestAll;
+        let res_hop = algo_hop
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest, None)?
+            .expect("Hop: Routing Failed!");
 
-//             let res_sabr = algo_sabr
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
+        let dest_id_2: usize = ref_2.into();
+        let path_hop = res_hop[dest_id_2].as_ref().unwrap();
+        assert_eq!(path_hop.arrival_time.end, 4, "Hop: Expected arrival 4");
+        assert_eq!(path_hop.hop_count, 2, "Hop: Expected 2 hops");
 
-//             assert_time_hop(&res_sabr, 2, 2, 2, "SABR");
+        let mut algo_sabr = HybridParenting::<SABR, NoManagement, EVLManager>::new();
+        let mut dest_sabr = DestAll;
+        let res_sabr = algo_sabr
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest_sabr, None)?
+            .expect("SABR: Routing Failed!");
 
-//             Ok(())
-//         })
-//     }
+        let path_sabr = res_sabr[dest_id_2].as_ref().unwrap();
+        assert_eq!(path_sabr.arrival_time.end, 4, "SABR: Expected arrival 4");
+        assert_eq!(path_sabr.hop_count, 2, "SABR: Expected 2 hops");
 
-//     #[test]
-//     fn test_a_to_c_tree_excluded() -> Result<(), ASABRError> {
-//         for_test_graph(0, |mg, algo_hop: &mut HybridParenting<true, _, _, Hop>| {
-//             make_guard!(guard);
-//             let mut algo_sabr =
-//                 HybridParenting::<true, NoManagement, EVLManager, SABR>::new(guard, mg);
+        Ok(())
+    }
 
-//             let bundle = make_bundle(2, 1, 1.0, 2000);
-//             let excluded = [1].map(|id| mg.node_id_ref(id).unwrap().real().unwrap());
-//             mg.mark_excluded(&excluded);
-//             let res_hop = algo_hop
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
-//             assert!(res_hop[1].is_none(), "Hop : B should be excluded");
-//             assert!(
-//                 res_hop[2].is_none(),
-//                 "Hop : C should not be accessible without B"
-//             );
+    #[test]
+    fn test_a_to_c_tree_excluded() -> Result<(), ASABRError> {
+        let graph_str = "node 0 A node 1 B node 2 C
+                            contact 0 1 0 2000 100 1
+                            contact 1 2 0 2000 100 1";
 
-//             let res_sabr = algo_sabr
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
-//             assert!(res_sabr[1].is_none(), "SABR : B should be excluded");
-//             assert!(
-//                 res_sabr[2].is_none(),
-//                 "SABR : C should not be accessible without B"
-//             );
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-//             Ok(())
-//         })
-//     }
+        let ref_1 = match graph.node_id_ref(1.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let real_ref_1: crate::multigraph::RealNodeRef = ref_1.into();
+        graph.mark_excluded(&[real_ref_1]);
 
-//     #[test]
-//     fn test_a_to_c_path_excl() -> Result<(), ASABRError> {
-//         for_test_graph(0, |mg, algo_hop: &mut HybridParenting<false, _, _, Hop>| {
-//             make_guard!(guard);
-//             let mut algo_sabr =
-//                 HybridParenting::<false, NoManagement, EVLManager, SABR>::new(guard, mg);
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
-//             let bundle = make_bundle(2, 1, 1.0, 2000);
-//             let excluded = [1].map(|id| mg.node_id_ref(id).unwrap().real().unwrap());
-//             mg.mark_excluded(&excluded);
+        let bundle = make_bundle(2, 100, 2000);
 
-//             let res_hop = algo_hop
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
-//             assert!(
-//                 res_hop[2].is_none(),
-//                 "Hop : C should not be accessible without B"
-//             );
+        let mut algo_hop = HybridParenting::<Hop, NoManagement, EVLManager>::new();
+        let mut dest = DestAll;
+        let res_hop = algo_hop
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest, None)?
+            .expect("Hop: Routing Failed!");
 
-//             let res_sabr = algo_sabr
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
-//             assert!(
-//                 res_sabr[2].is_none(),
-//                 "SABR : C should not be accessible without B"
-//             );
+        assert!(res_hop[1].is_none(), "Hop: Node B should be excluded");
+        assert!(
+            res_hop[2].is_none(),
+            "Hop: Node C should not be accessible without B"
+        );
 
-//             Ok(())
-//         })
-//     }
+        let mut algo_sabr = HybridParenting::<SABR, NoManagement, EVLManager>::new();
+        let mut dest_sabr = DestAll;
+        let res_sabr = algo_sabr
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest_sabr, None)?
+            .expect("SABR: Routing Failed!");
 
-//     #[test]
-//     fn test_two_paths_to_c() -> Result<(), ASABRError> {
-//         for_test_graph(1, |mg, algo_hop: &mut HybridParenting<false, _, _, Hop>| {
-//             make_guard!(guard);
-//             let mut algo_sabr =
-//                 HybridParenting::<false, NoManagement, EVLManager, SABR>::new(guard, mg);
+        assert!(res_sabr[1].is_none(), "SABR: Node B should be excluded");
+        assert!(
+            res_sabr[2].is_none(),
+            "SABR: Node C should not be accessible without B"
+        );
 
-//             let bundle = make_bundle(2, 1, 1.0, 2000);
+        Ok(())
+    }
 
-//             let res_hop = algo_hop
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
+    #[test]
+    fn test_a_to_c_path_excl() -> Result<(), ASABRError> {
+        let graph_str = "node 0 A node 1 B node 2 C
+                            contact 0 1 0 2000 100 1
+                            contact 1 2 0 2000 100 1";
 
-//             assert_time_hop(&res_hop, 2, 11, 1, "Hop");
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-//             let res_sabr = algo_sabr
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
+        let ref_1 = match graph.node_id_ref(1.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let real_ref_1: crate::multigraph::RealNodeRef = ref_1.into();
+        graph.mark_excluded(&[real_ref_1]);
 
-//             assert_time_hop(&res_sabr, 2, 3, 2, "SABR");
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let ref_2 = match graph.node_id_ref(2.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
-//             Ok(())
-//         })
-//     }
+        let bundle = make_bundle(2, 100, 2000);
 
-//     #[test]
-//     fn test_exemple_1() -> Result<(), ASABRError> {
-//         for_test_graph(2, |mg, algo_hop: &mut HybridParenting<false, _, _, Hop>| {
-//             make_guard!(guard);
-//             let mut algo_sabr =
-//                 HybridParenting::<false, NoManagement, EVLManager, SABR>::new(guard, mg);
+        let mut algo_hop = HybridParenting::<Hop, NoManagement, EVLManager>::new();
+        let mut dest = Dest::INode(ref_2);
+        let res_hop = algo_hop
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest, None)?
+            .expect("Hop: Routing Failed!");
+        assert!(
+            res_hop[2].is_none(),
+            "Hop: Node C should not be accessible without B"
+        );
 
-//             let bundle = make_bundle(3, 0, 0.0, 1000);
+        let mut algo_sabr = HybridParenting::<SABR, NoManagement, EVLManager>::new();
+        let mut dest_sabr = Dest::INode(ref_2);
+        let res_sabr = algo_sabr
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest_sabr, None)?
+            .expect("SABR: Routing Failed!");
+        assert!(
+            res_sabr[2].is_none(),
+            "SABR: Node C should not be accessible without B"
+        );
 
-//             let res_hop = algo_hop
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
+        Ok(())
+    }
 
-//             assert_time_hop(&res_hop, 3, 30, 2, "Hop");
+    #[test]
+    fn test_two_paths_to_c() -> Result<(), ASABRError> {
+        let graph_str = "node 0 A node 1 B node 2 C node 3 D
+                            contact 0 1 0 2000 100 1
+                            contact 1 2 0 2000 100 1
+                            contact 0 3 0 2000 100 3
+                            contact 3 2 0 2000 100 3
+                            contact 0 2 0 2000 100 10";
 
-//             let res_sabr = algo_sabr
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-//             assert_time_hop(&res_sabr, 3, 30, 2, "SABR");
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
-//             Ok(())
-//         })
-//     }
+        let bundle = make_bundle(2, 100, 2000);
 
-//     #[test]
-//     fn test_exemple_2() -> Result<(), ASABRError> {
-//         for_test_graph(3, |mg, algo_hop: &mut HybridParenting<false, _, _, Hop>| {
-//             make_guard!(guard);
-//             let mut algo_sabr =
-//                 HybridParenting::<false, NoManagement, EVLManager, SABR>::new(guard, mg);
+        let mut algo_hop = HybridParenting::<Hop, NoManagement, EVLManager>::new();
+        let mut dest_hop = DestAll;
+        let res_hop = algo_hop
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest_hop, None)?
+            .expect("Hop: Routing Failed!");
 
-//             let bundle = make_bundle(4, 0, 0.0, 1000);
+        let path_hop = res_hop[2].as_ref().unwrap();
+        assert_eq!(
+            path_hop.arrival_time.end, 11,
+            "Hop: Expected arrival 11 via direct path"
+        );
+        assert_eq!(path_hop.hop_count, 1, "Hop: Expected 1 hop");
 
-//             let res_hop = algo_hop
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
+        let mut algo_sabr = HybridParenting::<SABR, NoManagement, EVLManager>::new();
+        let mut dest_sabr = DestAll;
+        let res_sabr = algo_sabr
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest_sabr, None)?
+            .expect("SABR: Routing Failed!");
 
-//             assert_time_hop(&res_hop, 4, 50, 3, "Hop");
+        let path_sabr = res_sabr[2].as_ref().unwrap();
+        assert_eq!(
+            path_sabr.arrival_time.end, 4,
+            "SABR: Expected arrival 4 via B"
+        );
+        assert_eq!(path_sabr.hop_count, 2, "SABR: Expected 2 hops");
 
-//             let res_sabr = algo_sabr
-//                 .find_path(mg, 0, mg.node_id_ref(0).unwrap(), &bundle)
-//                 .expect("Hop : Routing Failed !")
-//                 .unwrap();
+        Ok(())
+    }
 
-//             assert_time_hop(&res_sabr, 4, 50, 3, "SABR");
+    #[test]
+    fn test_exemple_1() -> Result<(), ASABRError> {
+        let graph_str = "node 0 source node 1 from_C0 node 2 from_C2_C1 node 3 from_C3
+                         contact 0 1 0 10 1 0
+                         contact 0 2 25 35 1 0
+                         contact 1 2 10 20 1 0
+                         contact 2 3 30 40 1 0";
 
-//             Ok(())
-//         })
-//     }
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-//     // #[test]
-//     // fn test_vnode_anycast_tree() -> Result<(), ASABRError> {
-//     //     let mg = vnode_anycast_graph()?;
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let ref_3 = match graph.node_id_ref(3.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
-//     //     let mut algo = HybridParentingTreeExcl::<NoManagement, EVLManager, SABR>::new(mg.clone());
+        let bundle = make_bundle(3, 0, 1000);
 
-//     //     let bundle = make_bundle(5, 1, 1.0, 2000.0);
+        let mut algo_hop = HybridParenting::<Hop, NoManagement, EVLManager>::new();
+        let mut dest_hop = Dest::INode(ref_3);
+        let res_hop = algo_hop
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest_hop, None)?
+            .expect("Hop: Routing Failed!");
 
-//     //     let res = algo
-//     //         .get_next(0.0, 0, &bundle, &[][..])
-//     //         .expect("Routing to vnode failed!");
+        let dest_id: usize = ref_3.into();
+        let path_hop = res_hop[dest_id].as_ref().unwrap();
+        assert_eq!(path_hop.arrival_time.end, 30, "Hop: Expected arrival 30");
+        assert_eq!(path_hop.hop_count, 2, "Hop: Expected 2 hops");
 
-//     //     assert!(
-//     //         res.by_destination[5].is_some(),
-//     //         "VNode V(5) should be reachable"
-//     //     );
+        let mut algo_sabr = HybridParenting::<SABR, NoManagement, EVLManager>::new();
+        let mut dest_sabr = Dest::INode(ref_3);
+        let res_sabr = algo_sabr
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest_sabr, None)?
+            .expect("SABR: Routing Failed!");
 
-//     //     let vnode_route = res.by_destination[5].as_ref().unwrap().borrow();
-//     //     assert_eq!(
-//     //         vnode_route.to_node, 5,
-//     //         "Route to_node should be vnode vertex ID (5), got {}",
-//     //         vnode_route.to_node
-//     //     );
+        let path_sabr = res_sabr[dest_id].as_ref().unwrap();
+        assert_eq!(path_sabr.arrival_time.end, 30, "SABR: Expected arrival 30");
+        assert_eq!(path_sabr.hop_count, 2, "SABR: Expected 2 hops");
 
-//     //     Ok(())
-//     // }
+        Ok(())
+    }
 
-//     // #[test]
-//     // fn test_vnode_anycast_path() -> Result<(), ASABRError> {
-//     //     let mg = vnode_anycast_graph()?;
+    #[test]
+    fn test_exemple_2() -> Result<(), ASABRError> {
+        let graph_str =
+            "node 0 source node 1 from_C0 node 2 from_C2_C1 node 3 from_C3 node 4 from_C4
+                         contact 0 1 0 10 1 0
+                         contact 0 2 25 35 1 0
+                         contact 1 2 10 23 1 0
+                         contact 2 3 20 40 1 0
+                         contact 3 4 50 60 1 0";
 
-//     //     let mut algo = HybridParentingPathExcl::<NoManagement, EVLManager, SABR>::new(mg.clone());
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let mut graph = Multigraph::new(id, contact_plan).unwrap();
 
-//     //     let bundle = make_bundle(5, 1, 1.0, 2000.0);
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let ref_4 = match graph.node_id_ref(4.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
 
-//     //     let res = algo
-//     //         .get_next(0.0, 0, &bundle, &[][..])
-//     //         .expect("Routing to vnode failed!");
+        let bundle = make_bundle(4, 0, 1000);
 
-//     //     assert!(
-//     //         res.by_destination[5].is_some(),
-//     //         "VNode V(5) should be reachable via path search"
-//     //     );
+        let mut algo_hop = HybridParenting::<Hop, NoManagement, EVLManager>::new();
+        let mut dest_hop = Dest::INode(ref_4);
+        let res_hop = algo_hop
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest_hop, None)?
+            .expect("Hop: Routing Failed!");
 
-//     //     let vnode_route = res.by_destination[5].as_ref().unwrap().borrow();
-//     //     assert_eq!(
-//     //         vnode_route.to_node, 5,
-//     //         "Route to_node should be vnode ID (5)"
-//     //     );
+        let dest_id: usize = ref_4.into();
+        let path_hop = res_hop[dest_id].as_ref().unwrap();
+        assert_eq!(path_hop.arrival_time.end, 50, "Hop: Expected arrival 50");
+        assert_eq!(path_hop.hop_count, 3, "Hop: Expected 3 hops");
 
-//     //     Ok(())
-//     // }
-// }
+        let mut algo_sabr = HybridParenting::<SABR, NoManagement, EVLManager>::new();
+        let mut dest_sabr = Dest::INode(ref_4);
+        let res_sabr = algo_sabr
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest_sabr, None)?
+            .expect("SABR: Routing Failed!");
+
+        let path_sabr = res_sabr[dest_id].as_ref().unwrap();
+        assert_eq!(path_sabr.arrival_time.end, 50, "SABR: Expected arrival 50");
+        assert_eq!(path_sabr.hop_count, 3, "SABR: Expected 3 hops");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_vnode_anycast_tree() -> Result<(), ASABRError> {
+        let graph_str = "node 0 A node 1 B node 2 C node 3 D node 4 E
+                         vnode 5 V [ 2 , 4 ]
+                         contact 0 1 0 2000 100 2
+                         contact 1 2 0 2000 100 2
+                         contact 0 3 0 2000 100 1
+                         contact 3 4 0 2000 100 1";
+
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let mut graph = Multigraph::new(id, contact_plan).unwrap();
+
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+
+        let bundle = make_bundle(1, 100, 2000);
+
+        let mut algo = HybridParenting::<SABR, NoManagement, EVLManager>::new();
+        let mut dest = DestAll;
+
+        let res = algo
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest, None)?
+            .expect("Routing to vnode failed!");
+
+        let e_idx: usize = 4;
+        assert!(res[e_idx].is_some(), "Real node E(4) should be reachable");
+        let path_to_e = res[e_idx].as_ref().unwrap();
+        assert_eq!(
+            path_to_e.arrival_time.end, 4,
+            "Should pick the faster path through E (arrival 4)"
+        );
+
+        let c_idx: usize = 2;
+        assert!(res[c_idx].is_some(), "Real node C(2) should be reachable");
+        let path_to_c = res[c_idx].as_ref().unwrap();
+        assert_eq!(
+            path_to_c.arrival_time.end, 6,
+            "Path to C is slower (arrival 6)"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_vnode_anycast_path() -> Result<(), ASABRError> {
+        let graph_str = "node 0 A node 1 B node 2 C node 3 D node 4 E
+                         vnode 5 V [ 2 , 4 ]
+                         contact 0 1 0 2000 100 2
+                         contact 1 2 0 2000 100 2
+                         contact 0 3 0 2000 100 1
+                         contact 3 4 0 2000 100 1";
+
+        let lines = graph_str.lines();
+        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
+        make_guard!(id);
+        let mut graph = Multigraph::new(id, contact_plan).unwrap();
+
+        let ref_0 = match graph.node_id_ref(0.into()).unwrap() {
+            NodeRef::I(r) => r,
+            _ => panic!(),
+        };
+        let ref_5 = match graph.node_id_ref(5.into()).unwrap() {
+            NodeRef::V(r) => r,
+            _ => panic!(),
+        };
+
+        let bundle = make_bundle(1, 100, 2000);
+
+        let mut algo = HybridParenting::<SABR, NoManagement, EVLManager>::new();
+        let mut dest = Dest::VNode(ref_5);
+
+        let res = algo
+            .find_path(&mut graph, 0, ref_0, &bundle, &mut dest, None)?
+            .expect("Routing to vnode failed!");
+
+        let e_idx: usize = 4;
+        assert!(
+            res[e_idx].is_some(),
+            "Real node E(4) should be the chosen path for the VNode"
+        );
+        let path_to_e = res[e_idx].as_ref().unwrap();
+        assert_eq!(
+            path_to_e.arrival_time.end, 4,
+            "Should pick the faster path through E even on targeted search"
+        );
+
+        Ok(())
+    }
+}

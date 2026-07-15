@@ -88,7 +88,7 @@ impl NodeManager for MockNodeManager {
     ) -> Result<(), ASABRError> {
         if !self.rx_ok {
             panic!("Cannot receive a paquet!")
-        } else if !self.tx_ok && transmitions.len() != 0 {
+        } else if !self.tx_ok && !transmitions.is_empty() {
             panic!("Cannot send a paquet")
         }
         Ok(())

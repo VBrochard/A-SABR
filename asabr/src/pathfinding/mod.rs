@@ -746,7 +746,7 @@ mod tests {
         let plan = ContactPlan {
             realnodes: nodes,
             vnodes: vec![],
-            contacts: contacts,
+            contacts,
         };
 
         make_guard!(id);
@@ -804,7 +804,7 @@ mod tests {
         let plan = ContactPlan {
             realnodes: nodes,
             vnodes: vec![],
-            contacts: contacts,
+            contacts,
         };
         make_guard!(id);
         let graph = Multigraph::new(id, plan).unwrap();
@@ -849,7 +849,7 @@ mod tests {
         let plan = ContactPlan {
             realnodes: nodes,
             vnodes: vec![],
-            contacts: contacts,
+            contacts,
         };
 
         make_guard!(id);

@@ -8,8 +8,7 @@ use a_sabr::node_manager::NodeManager;
 use a_sabr::node_manager::none::NoManagement;
 use a_sabr::parse_transparent;
 use a_sabr::parsing::LexFrom;
-use a_sabr::pathfinding::HybridParenting;
-use a_sabr::pathfinding::Pathfinding;
+use a_sabr::pathfinding::{HybridParenting, Pathfinding};
 use a_sabr::transparent_NM;
 use a_sabr::types::Date;
 use a_sabr::types::Duration;
@@ -39,7 +38,7 @@ impl NodeManager for NoRetention {
         transmition: a_sabr::types::TimeInterval,
         _next: a_sabr::types::NodeID,
     ) -> bool {
-        transmition.end - reception.start < self.max_proc_time
+        transmition.start - reception.end <= self.max_proc_time
     }
 
     fn dry_run_multi(
@@ -52,7 +51,7 @@ impl NodeManager for NoRetention {
         let r = transmitions
             .iter()
             .enumerate()
-            .take_while(|(_, trans)| trans.0.end - reception.start < self.max_proc_time)
+            .take_while(|(_, trans)| trans.0.start - reception.end <= self.max_proc_time)
             .last();
         Some(r.map_or(0, |(index, _)| index))
     }
@@ -111,6 +110,7 @@ fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<()
         size: 0,
         expiration: 1000,
     };
+
     mk_graph!(graph, NM, EVLManager, cp_path, file);
 
     let mut finder = HybridParenting::<SABR, _, _>::new();
@@ -120,11 +120,6 @@ fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<()
         .ok_or(ASABRError::ContactPlanError("No Node 0"))?;
     let mut destination = graph.node_id_ref(2.into())?.routable().unwrap();
     let res = finder.find_path(&mut graph, 0, source, &bundle, &mut destination, None)?;
-    // let file = File::open(cp_path).unwrap();
-    // let lines = BufReader::new(file).lines().map(|l| l.unwrap());
-
-    // let mut mpt_graph =
-    //     init_pathfinding::<NM, EVLManager, HybridParentingPath<NM, EVLManager, SABR>, _, _>(lines)?;
 
     println!("\nRunning with contact plan location={cp_path}, and destination node=2 ");
 
@@ -137,7 +132,6 @@ fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<()
 
     Ok(())
 }
-
 fn main() -> Result<(), ASABRError> {
     edge_case_example::<NoManagement>("asabr/examples/satellite_constellation/contact_plan_1.cp")?;
     edge_case_example::<NoRetOrNone>("asabr/examples/satellite_constellation/contact_plan_2.cp")?;
