@@ -11,6 +11,7 @@ use crate::{
 };
 use alloc::{boxed::Box, rc::Rc};
 
+/// Describes when a pathfinding search has reached its destination.
 pub trait Destination<'id> {
     /// A new pathfinding begin, reinit to a state of no reachable nodes
     fn reinit(&mut self);
@@ -46,11 +47,17 @@ pub trait Destination<'id> {
     ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError>;
 }
 
+/// Standard destination selector.
 pub enum Dest<'id> {
+    /// A single internal node destination.
     INode(INodeRef<'id>),
+    /// A single virtual node destination.
     VNode(VNodeRef<'id>),
+    /// All routable nodes are destinations.
     AllNodes(),
+    /// Stop after reaching any one internal node.
     AnyCast(Rc<[INodeRef<'id>]>),
+    /// Stop after reaching all listed internal nodes.
     MultiCast(Rc<[INodeRef<'id>]>, Box<[bool]>, usize),
 }
 
@@ -181,9 +188,11 @@ impl<'id> From<All> for Dest<'id> {
     }
 }
 impl<'id> Dest<'id> {
+    /// Creates an anycast destination from sorted internal node references.
     pub fn anycast(casts: Rc<[INodeRef<'id>]>) -> Self {
         Self::AnyCast(casts)
     }
+    /// Creates a multicast destination from sorted internal node references.
     pub fn multicast(casts: Rc<[INodeRef<'id>]>) -> Self {
         let bools = unsafe { Box::new_zeroed_slice(casts.len()).assume_init() };
         Self::MultiCast(casts, bools, 0)
@@ -339,6 +348,7 @@ impl<'id> Destination<'id> for RoutableNodeRef<'id> {
     }
 }
 
+/// Destination that keeps searching all useful routable nodes.
 pub struct All;
 
 impl<'id> Destination<'id> for All {

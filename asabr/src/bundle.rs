@@ -1,9 +1,9 @@
 use crate::types::{Date, Priority, Volume};
 extern crate alloc;
-/// A structure representing a routing bundle containing essential information for pathfinding.
+/// A routing bundle containing the information needed for pathfinding.
 ///
-/// The `Bundle` struct encapsulates the routing details required for determining optimal paths
-/// in a network, including source and destination nodes, priority, size, and expiration time.
+/// The `Bundle` stores the source node, priority, volume, and expiration time.
+/// Destinations are handled separately by the pathfinding API.
 #[derive(Clone, Debug)]
 pub struct Bundle {
     /// The priority level of the bundle, used to influence routing decisions.
