@@ -7,12 +7,11 @@ use a_sabr::{
     bundle::Bundle,
     contact_plan::asabr_file_lexer::parse_from_iter,
     errors::ASABRError,
-    multigraph::{Multigraph, NodeRef},
+    multigraph::{NodeRef, RoutableNodeRef},
     node_manager::none::NoManagement,
     parsing::CMDynStandard,
-    pathfinding::{HybridParenting, Pathfinding},
-    route_storage::{Cached, cache::TreeCache},
-    routing::aliases::SpsnHybridParenting,
+    pathfinding::top_level::aliases::SpsnHybridParenting,
+    utils::Router,
 };
 use generativity::make_guard;
 
@@ -31,38 +30,34 @@ fn main() -> Result<(), ASABRError> {
     );
 
     make_guard!(id);
-    let mut graph = Multigraph::new(id, contact_plan).unwrap();
+    let mut router = Router::<_, _, SpsnHybridParenting<1, _, _, _>, RoutableNodeRef>::build(
+        id,
+        contact_plan,
+        (10, ()),
+    )?;
 
     println!("Virtual nodes:");
-    println!("{graph}");
+    println!("{}", *router);
 
     println!("\n---\n");
 
-    // We create a storage for the paths and initialize SPSN with the current pathfinding API.
-    let table = TreeCache::new(&graph, 10);
-    let mut spsn = SpsnHybridParenting::<1, NoManagement, CMDynStandard, _>::new(Cached::new(
-        table,
-        HybridParenting::new(),
-    ));
-
     // We will route a bundle to the virtual gateway node 8.
     let bundle = Bundle {
-        source: 0.into(),
         priority: 0,
         size: 1,
         expiration: 10000,
     };
 
-    let Ok(NodeRef::I(source)) = graph.node_id_ref(0.into()) else {
+    let Ok(NodeRef::I(source)) = router.node_id_ref(0.into()) else {
         panic!("Expected RNodeRef for source node 0")
     };
-    let mut destination = graph.node_id_ref(8.into())?.routable().unwrap();
+    let destination = router.node_id_ref(8.into())?.routable().unwrap();
 
     // We schedule the bundle (resource updates were conducted).
-    let out = spsn.find_path(&mut graph, 0, source, &bundle, &mut destination, None)?;
+    let out = router.route(destination, 0, source, &bundle, None)?;
 
-    if let Some(out) = out {
-        println!("{:?}", out.get_full_path(destination, &graph));
+    if let Some((path, _)) = out {
+        println!("{}", path);
     }
 
     Ok(())

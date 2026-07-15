@@ -5,7 +5,7 @@ use crate::{
     errors::ASABRError,
     multigraph::{INodeRef, Multigraph, NodeRef, RoutableNodeRef, VNodeRef},
     node_manager::NodeManager,
-    pathfinding::PathFindingOutput,
+    pathfinding::{PathFindingOutput, PathIterator},
     paths::PathFragment,
     types::Date,
 };
@@ -35,13 +35,15 @@ pub trait Destination<'id> {
         &self,
         graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
     ) -> Option<usize>;
-    type RoutingOutput;
-    fn route(
+    type RoutingOutput<'a>
+    where
+        'id: 'a;
+    fn route<'a>(
         &mut self,
         graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
         bundle: &Bundle,
-        route: PathFindingOutput<'id, '_>,
-    ) -> Result<Option<Self::RoutingOutput>, ASABRError>;
+        route: PathFindingOutput<'id, 'a>,
+    ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError>;
 }
 
 pub enum Dest<'id> {
@@ -131,13 +133,16 @@ impl<'id> Destination<'id> for Dest<'id> {
             Dest::MultiCast(..) => None,
         }
     }
-    type RoutingOutput = ();
+    type RoutingOutput<'a>
+        = ()
+    where
+        'id: 'a;
     fn route(
         &mut self,
         _graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
         _bundle: &Bundle,
         _route: PathFindingOutput<'id, '_>,
-    ) -> Result<Option<Self::RoutingOutput>, ASABRError> {
+    ) -> Result<Option<Self::RoutingOutput<'_>>, ASABRError> {
         todo!()
     }
 }
@@ -215,14 +220,22 @@ impl<'id> Destination<'id> for INodeRef<'id> {
     ) -> Option<usize> {
         Some((*self).into())
     }
-    type RoutingOutput = PathFragment<'id>;
-    fn route(
+    type RoutingOutput<'a>
+        = (
+        PathIterator<'id, 'a, PathFindingOutput<'id, 'a>>,
+        PathFragment<'id>,
+    )
+    where
+        'id: 'a;
+    fn route<'a>(
         &mut self,
         graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
         bundle: &Bundle,
-        route: PathFindingOutput<'id, '_>,
-    ) -> Result<Option<Self::RoutingOutput>, ASABRError> {
-        route.commit_path_to((*self).into(), bundle, graph)
+        route: PathFindingOutput<'id, 'a>,
+    ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError> {
+        let last = route.commit_path_to((*self).into(), bundle, graph)?;
+        let iter = route.full_path_rev_owned((*self).into(), graph);
+        Ok(iter.zip(last))
     }
 }
 
@@ -256,14 +269,22 @@ impl<'id> Destination<'id> for VNodeRef<'id> {
     ) -> Option<usize> {
         Some((*self).into())
     }
-    type RoutingOutput = PathFragment<'id>;
-    fn route(
+    type RoutingOutput<'a>
+        = (
+        PathIterator<'id, 'a, PathFindingOutput<'id, 'a>>,
+        PathFragment<'id>,
+    )
+    where
+        'id: 'a;
+    fn route<'a>(
         &mut self,
         graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
         bundle: &Bundle,
-        route: PathFindingOutput<'id, '_>,
-    ) -> Result<Option<Self::RoutingOutput>, ASABRError> {
-        route.commit_path_to((*self).into(), bundle, graph)
+        route: PathFindingOutput<'id, 'a>,
+    ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError> {
+        let last = route.commit_path_to((*self).into(), bundle, graph)?;
+        let iter = route.full_path_rev_owned((*self).into(), graph);
+        Ok(iter.zip(last))
     }
 }
 
@@ -299,20 +320,28 @@ impl<'id> Destination<'id> for RoutableNodeRef<'id> {
     ) -> Option<usize> {
         Some(graph.routable_to_usize(*self))
     }
-    type RoutingOutput = PathFragment<'id>;
-    fn route(
+    type RoutingOutput<'a>
+        = (
+        PathIterator<'id, 'a, PathFindingOutput<'id, 'a>>,
+        PathFragment<'id>,
+    )
+    where
+        'id: 'a;
+    fn route<'a>(
         &mut self,
         graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
         bundle: &Bundle,
-        route: PathFindingOutput<'id, '_>,
-    ) -> Result<Option<Self::RoutingOutput>, ASABRError> {
-        route.commit_path_to(*self, bundle, graph)
+        route: PathFindingOutput<'id, 'a>,
+    ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError> {
+        let last = route.commit_path_to(*self, bundle, graph)?;
+        let iter = route.full_path_rev_owned(*self, graph);
+        Ok(iter.zip(last))
     }
 }
 
 pub struct All;
 
-impl Destination<'_> for All {
+impl<'id> Destination<'id> for All {
     #[inline(always)]
     fn reinit(&mut self) {}
 
@@ -341,13 +370,16 @@ impl Destination<'_> for All {
     ) -> Option<usize> {
         None
     }
-    type RoutingOutput = ();
-    fn route(
+    type RoutingOutput<'a>
+        = ()
+    where
+        'id: 'a;
+    fn route<'a>(
         &mut self,
-        _graph: &mut Multigraph<'_, impl NodeManager, impl ContactManager>,
+        _graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
         _bundle: &Bundle,
-        _route: PathFindingOutput<'_, '_>,
-    ) -> Result<Option<Self::RoutingOutput>, ASABRError> {
+        _route: PathFindingOutput<'id, 'a>,
+    ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError> {
         todo!()
     }
 }

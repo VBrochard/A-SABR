@@ -78,7 +78,6 @@ impl From<Duration> for NoRetention {
 
 parse_transparent!(NoRetention, Duration);
 
-#[allow(dead_code)]
 struct NoRetOrNone(Box<dyn NodeManager>);
 
 transparent_NM!(NoRetOrNone);
@@ -105,10 +104,9 @@ impl From<choice::Choice> for NoRetOrNone {
     }
 }
 parse_transparent!(NoRetOrNone, choice::Choice);
-/// Implements the DispatchParser to allow dynamic parsing.
+
 fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<(), ASABRError> {
     let bundle = Bundle {
-        source: 0.into(),
         priority: 0,
         size: 0,
         expiration: 1000,
@@ -121,7 +119,7 @@ fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<()
         .internal()
         .ok_or(ASABRError::ContactPlanError("No Node 0"))?;
     let mut destination = graph.node_id_ref(2.into())?.routable().unwrap();
-    let res = finder.find_path(&mut graph, 0, source, &bundle, &mut destination, None);
+    let res = finder.find_path(&mut graph, 0, source, &bundle, &mut destination, None)?;
     // let file = File::open(cp_path).unwrap();
     // let lines = BufReader::new(file).lines().map(|l| l.unwrap());
 
@@ -130,8 +128,10 @@ fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<()
 
     println!("\nRunning with contact plan location={cp_path}, and destination node=2 ");
 
-    match res {
-        Ok(Some(route)) => println!("{}", route.full_path_rev(destination, &graph).unwrap()),
+    match &res {
+        Some(route) if let Some(route) = route.full_path_rev(destination, &graph) => {
+            println!("{}", route)
+        }
         _ => println!("No route found to node 2."),
     }
 
@@ -140,8 +140,7 @@ fn edge_case_example<NM: NodeManager + LexFrom<str>>(cp_path: &str) -> Result<()
 
 fn main() -> Result<(), ASABRError> {
     edge_case_example::<NoManagement>("asabr/examples/satellite_constellation/contact_plan_1.cp")?;
-    //TODO: fix
-    // edge_case_example::<NoRetOrNone>("asabr/examples/satellite_constellation/contact_plan_2.cp")?;
+    edge_case_example::<NoRetOrNone>("asabr/examples/satellite_constellation/contact_plan_2.cp")?;
 
     Ok(())
 

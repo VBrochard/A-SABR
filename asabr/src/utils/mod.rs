@@ -49,6 +49,7 @@ impl From<OptUsize> for Option<usize> {
 macro_rules! mk_graph {
     ($graph:ident,$NM:ty,$CM:ty,$content:expr$(,iterator)?) => {
         $crate::utils::make_guard!($graph);
+        #[allow(unused_mut)]
         let mut $graph = $crate::multigraph::Multigraph::new(
             $graph,
             $crate::contact_plan::asabr_file_lexer::parse_from_iter::<$NM, $CM>($content)?,
@@ -158,14 +159,14 @@ impl<'id, NM: NodeManager, CM: ContactManager, P: Pathfinding<'id, NM, CM, D>, D
         )
     }
 
-    pub fn route(
-        &mut self,
+    pub fn route<'a>(
+        &'a mut self,
         mut destination: D,
         routing_time: Date,
         source: INodeRef<'id>,
         bundle: &Bundle,
         prune_time: Option<Date>,
-    ) -> Result<Option<D::RoutingOutput>, ASABRError> {
+    ) -> Result<Option<D::RoutingOutput<'a>>, ASABRError> {
         let route = self.pathfinder.find_path(
             &mut self.multigraph,
             routing_time,

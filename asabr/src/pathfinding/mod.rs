@@ -1,18 +1,23 @@
 extern crate alloc;
 use alloc::vec::Vec;
-use core::fmt::Debug;
-use core::ops::{Deref, DerefMut};
+use core::{
+    fmt::Debug,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
-use crate::bundle::Bundle;
-use crate::contact::Contact;
-use crate::contact_manager::{ContactManager, ContactManagerTxData};
-use crate::errors::ASABRError;
-use crate::multigraph::{ContactRef, INodeRef, Multigraph, RealNodeRef, RoutableNodeRef};
-use crate::node_manager::NodeManager;
-use crate::parsing::Either;
-use crate::pathfinding::destination::Destination;
-use crate::paths::{PathFragment, ViaHop};
-use crate::types::{Date, NodeID, TimeInterval};
+use crate::{
+    bundle::Bundle,
+    contact::Contact,
+    contact_manager::{ContactManager, ContactManagerTxData},
+    errors::ASABRError,
+    multigraph::{ContactRef, INodeRef, Multigraph, RealNodeRef, RoutableNodeRef},
+    node_manager::NodeManager,
+    parsing::Either,
+    pathfinding::destination::Destination,
+    paths::{PathFragment, ViaHop},
+    types::{Date, NodeID, TimeInterval},
+};
 
 pub mod dijkstra;
 pub mod dijkstra_impl;
@@ -41,12 +46,24 @@ pub struct PathFindingOutput<'id, 'a> {
     path_tree: Either<&'a mut [Option<PathFragment<'id>>], Vec<Option<PathFragment<'id>>>>,
 }
 
+impl Clone for PathFindingOutput<'_, '_> {
+    fn clone(&self) -> Self {
+        Self::from(Vec::from(&**self))
+    }
+}
+
 impl<'id, 'a> AsRef<[Option<PathFragment<'id>>]> for PathFindingOutput<'id, 'a> {
     fn as_ref(&self) -> &[Option<PathFragment<'id>>] {
         match &self.path_tree {
             Either::Left(l) => l,
             Either::Right(r) => r.as_ref(),
         }
+    }
+}
+
+impl<'id, 'a> AsRef<PathFindingOutput<'id, 'a>> for PathFindingOutput<'id, 'a> {
+    fn as_ref(&self) -> &PathFindingOutput<'id, 'a> {
+        self
     }
 }
 
@@ -108,10 +125,22 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
         &self,
         destination: RoutableNodeRef<'id>,
         graph: &Multigraph<'id, NM, CM>,
-    ) -> Option<PathIterator<'id, 'a, '_>> {
+    ) -> Option<PathIterator<'id, 'a, &PathFindingOutput<'id, 'a>>> {
         self[graph.routable_to_usize(destination)].map(|_| PathIterator {
             output: self,
             last: Some(graph.routable_to_usize(destination)),
+            _phantom: PhantomData,
+        })
+    }
+    pub fn full_path_rev_owned(
+        self,
+        destination: RoutableNodeRef<'id>,
+        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+    ) -> Option<PathIterator<'id, 'a, PathFindingOutput<'id, 'a>>> {
+        self[graph.routable_to_usize(destination)].map(|_| PathIterator {
+            output: self,
+            last: Some(graph.routable_to_usize(destination)),
+            _phantom: PhantomData,
         })
     }
     pub fn commit_path_to(
@@ -210,16 +239,17 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct PathIterator<'id, 'a, 'b> {
-    output: &'b PathFindingOutput<'id, 'a>,
+pub struct PathIterator<'id, 'a, T: AsRef<PathFindingOutput<'id, 'a>>> {
+    output: T,
     last: Option<usize>,
+    _phantom: PhantomData<PathFindingOutput<'id, 'a>>,
 }
 
-impl<'id, 'a, 'b> Iterator for PathIterator<'id, 'a, 'b> {
+impl<'id, 'a, T: AsRef<PathFindingOutput<'id, 'a>>> Iterator for PathIterator<'id, 'a, T> {
     type Item = PathFragment<'id>;
     fn next(&mut self) -> Option<Self::Item> {
         let idx = self.last.take()?;
-        let frag = self.output[idx]?;
+        let frag = self.output.as_ref()[idx]?;
         if let Some(hop) = frag.via {
             self.last = Some(hop.parent_frag)
         }
@@ -227,7 +257,7 @@ impl<'id, 'a, 'b> Iterator for PathIterator<'id, 'a, 'b> {
     }
 }
 
-impl<'id, 'a, 'b> PathIterator<'id, 'a, 'b> {
+impl<'id, 'a, T: AsRef<PathFindingOutput<'id, 'a>>> PathIterator<'id, 'a, T> {
     /// Commit a single destination path, and return the PathFragment of the first hop, or the first error.
     pub fn commit(
         self,
@@ -282,7 +312,10 @@ impl<'id, 'a, 'b> PathIterator<'id, 'a, 'b> {
     }
 }
 
-impl<'id, 'a, 'b> core::fmt::Display for PathIterator<'id, 'a, 'b> {
+impl<'id, 'a, T: AsRef<PathFindingOutput<'id, 'a>>> core::fmt::Display for PathIterator<'id, 'a, T>
+where
+    T: Clone,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut copy = self.clone().peekable();
         if let Some(last) = copy.peek() {
@@ -366,6 +399,7 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
     previous_node: Option<INodeRef<'id>>,
     neigbhoor_id: NodeID,
 ) -> Option<PathFragment<'id>> {
+    #[derive(Debug)]
     struct Best<'id> {
         contact: ContactRef<'id>,
         receive: TimeInterval,
@@ -429,7 +463,7 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
             }
             best = Some(Best {
                 contact: ctref,
-                receive: txdata.tx_window,
+                receive: txdata.rx_window,
                 dest: next_node_ref,
                 send: txdata.tx_window,
                 expiration: ct.as_ref().lifespan.end,
@@ -469,6 +503,7 @@ mod tests {
     use crate::bundle::Bundle;
 
     use crate::contact_manager::legacy::evl::EVLManager;
+    use crate::mk_graph;
     use crate::multigraph::NodeRef;
 
     use crate::contact_plan::asabr_file_lexer::parse_from_iter;
@@ -866,7 +901,7 @@ mod tests {
     }
 
     #[test]
-    fn test_best_contact_selected_1_hop() {
+    fn test_best_contact_selected_1_hop() -> Result<(), ASABRError> {
         let graph_str = "node 0 A node 1 B
                             contact 0 1 0 50 100 5
                             contact 0 1 0 200 100 2
@@ -874,10 +909,7 @@ mod tests {
                             contact 0 1 20 30 100 1";
         let bundle = make_bundle(1, 100, 2000);
 
-        let lines = graph_str.lines();
-        let contact_plan = parse_from_iter::<NoManagement, EVLManager>(lines).unwrap();
-        make_guard!(id);
-        let graph = Multigraph::new(id, contact_plan).unwrap();
+        mk_graph!(graph, NoManagement, EVLManager, graph_str, raw);
 
         let mut refs = Vec::new();
         for i in 0..2 {
@@ -905,7 +937,6 @@ mod tests {
             5, // The bundle is available at Node A at t=5
             contacts_iter,
         );
-
         assert!(
             result.is_some(),
             "TEST FAILED: Expected Some, at least one contact should be valid."
@@ -931,6 +962,7 @@ mod tests {
             route.via.is_some(),
             "TEST FAILED: Expected a ViaHop to be set."
         );
+        Ok(())
     }
 
     #[test]

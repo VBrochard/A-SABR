@@ -3,7 +3,7 @@ use std::fs::File;
 use a_sabr::{
     bundle::Bundle, contact_manager::segmentation::seg::SegmentationManager,
     contact_plan::from_tvgutil_file::TVGUtilContactPlan, node_manager::none::NoManagement,
-    routing::aliases::*,
+    pathfinding::top_level::aliases::build_generic_router,
 };
 use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 
@@ -13,7 +13,6 @@ pub fn benchmark(c: &mut Criterion) {
     let source = 0.into();
     let destinatation = 79.into();
     let bundle = Bundle {
-        source,
         priority: 0,
         size: 4_900_000,
         expiration: 24060,

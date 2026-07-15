@@ -12,7 +12,6 @@ use a_sabr::{
 
 fn edge_case_example(cp_path: &str, dest: NodeID) -> Result<(), ASABRError> {
     let bundle = Bundle {
-        source: 0.into(),
         priority: 0,
         size: 0,
         expiration: 1000,
