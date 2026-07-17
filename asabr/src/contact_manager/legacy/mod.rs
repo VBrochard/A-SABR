@@ -215,11 +215,11 @@ impl<const ADD_DELAY: bool, const AUTO_UPDATE: bool, const PRIO_COUNT: usize, co
             return None;
         }
         Some(ContactManagerTxData {
-            tx_window: TimeInterval {
+            send: TimeInterval {
                 start: tx_start,
                 end: tx_end,
             },
-            rx_window: TimeInterval {
+            recv: TimeInterval {
                 start: tx_start + self.0.delay,
                 end: tx_end + self.0.delay,
             },

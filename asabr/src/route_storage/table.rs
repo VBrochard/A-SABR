@@ -24,13 +24,15 @@ use super::PathsStorage;
 /// - `CM`: graph `ContactManager`, handling contacts within the network.
 /// - `D`: Destination key type used to index stored routes.
 #[derive(Debug, Default)]
-pub struct RoutingTable<'id, D: Destination<'id>> {
+pub struct RoutingTable<'id, D: Destination<'id, NM, CM>, NM: NodeManager, CM: ContactManager> {
     cache: BTreeMap<(usize, Priority), PathFindingOutput<'id, 'id>>,
     /// Routes are stored in a two-dimensional vector, grouped by destination node.
-    _phantom: PhantomData<fn(&'id (), D)>,
+    _phantom: PhantomData<fn(&'id (), D, NM, CM)>,
 }
 
-impl<'id, D: Destination<'id>> RoutingTable<'id, D> {
+impl<'id, D: Destination<'id, NM, CM>, NM: NodeManager, CM: ContactManager>
+    RoutingTable<'id, D, NM, CM>
+{
     /// Creates an empty routing table.
     pub fn new() -> Self {
         Self {
@@ -40,16 +42,16 @@ impl<'id, D: Destination<'id>> RoutingTable<'id, D> {
         }
     }
 }
-impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>>
-    From<(&Multigraph<'id, NM, CM>, ())> for RoutingTable<'id, D>
+impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id, NM, CM>>
+    From<(&Multigraph<'id, NM, CM>, ())> for RoutingTable<'id, D, NM, CM>
 {
     fn from(_value: (&Multigraph<'id, NM, CM>, ())) -> Self {
         Self::new()
     }
 }
 
-impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage<'id, NM, CM, D>
-    for RoutingTable<'id, D>
+impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id, NM, CM>>
+    PathsStorage<'id, NM, CM, D> for RoutingTable<'id, D, NM, CM>
 {
     //TODO:
     //this is technically unsound (the user could, in theory, get a pathfinding output and modify it by hand to create cycles, in wich case any reasonable execution would not terminate / OOM), but is technically UB.

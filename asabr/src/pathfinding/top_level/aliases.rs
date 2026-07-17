@@ -36,15 +36,15 @@ pub type SpsnContactParenting<'id, const PRIO_COUNT: usize, NM, CM, D> =
 
 /// VolCGR router using SABR distance and hybrid parenting.
 pub type VolCgrHybridParenting<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, D>, HybridParenting<'id, SABR, NM, CM>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D, NM, CM>, HybridParenting<'id, SABR, NM, CM>, NM, CM, D>;
 
 /// VolCGR router using SABR distance and node parenting.
 pub type VolCgrNodeParenting<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, D>, NodeParenting<'id, SABR>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D, NM, CM>, NodeParenting<'id, SABR>, NM, CM, D>;
 
 /// VolCGR router using SABR distance and contact parenting.
 pub type VolCgrContactParenting<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, D>, ContactParenting<'id, NM, CM, SABR>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D, NM, CM>, ContactParenting<'id, NM, CM, SABR>, NM, CM, D>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrSupressorHybridParenting<'id, NM, CM, D> = Cgr<
@@ -52,13 +52,19 @@ pub type CgrSupressorHybridParenting<'id, NM, CM, D> = Cgr<
     NM,
     CM,
     Suppressor<'id, HybridParenting<'id, SABR, NM, CM>, NM, CM>,
-    RoutingTable<'id, D>,
+    RoutingTable<'id, D, NM, CM>,
     D,
 >;
 
 #[cfg(feature = "contact_suppression")]
-pub type CgrSupressorNodeParenting<'id, NM, CM, D> =
-    Cgr<'id, NM, CM, Suppressor<'id, NodeParenting<'id, SABR>, NM, CM>, RoutingTable<'id, D>, D>;
+pub type CgrSupressorNodeParenting<'id, NM, CM, D> = Cgr<
+    'id,
+    NM,
+    CM,
+    Suppressor<'id, NodeParenting<'id, SABR>, NM, CM>,
+    RoutingTable<'id, D, NM, CM>,
+    D,
+>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrSupressorContactParenting<'id, NM, CM, D> = Cgr<
@@ -66,7 +72,7 @@ pub type CgrSupressorContactParenting<'id, NM, CM, D> = Cgr<
     NM,
     CM,
     Suppressor<'id, ContactParenting<'id, NM, CM, SABR>, NM, CM>,
-    RoutingTable<'id, D>,
+    RoutingTable<'id, D, NM, CM>,
     D,
 >;
 
@@ -84,15 +90,15 @@ pub type SpsnContactParentingHop<'id, const PRIO_COUNT: usize, NM, CM, D> =
 
 /// VolCGR router using hop distance and hybrid parenting.
 pub type VolCgrHybridParentingHop<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, D>, HybridParenting<'id, Hop, NM, CM>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D, NM, CM>, HybridParenting<'id, Hop, NM, CM>, NM, CM, D>;
 
 /// VolCGR router using hop distance and node parenting.
 pub type VolCgrNodeParentingHop<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, D>, NodeParenting<'id, Hop>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D, NM, CM>, NodeParenting<'id, Hop>, NM, CM, D>;
 
 /// VolCGR router using hop distance and contact parenting.
 pub type VolCgrContactParentingHop<'id, NM, CM, D> =
-    VolCgr<'id, RoutingTable<'id, D>, ContactParenting<'id, NM, CM, Hop>, NM, CM, D>;
+    VolCgr<'id, RoutingTable<'id, D, NM, CM>, ContactParenting<'id, NM, CM, Hop>, NM, CM, D>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrSupressorHybridParentingHop<'id, NM, CM, D> = Cgr<
@@ -100,13 +106,19 @@ pub type CgrSupressorHybridParentingHop<'id, NM, CM, D> = Cgr<
     NM,
     CM,
     Suppressor<'id, HybridParenting<'id, Hop, NM, CM>, NM, CM>,
-    RoutingTable<'id, D>,
+    RoutingTable<'id, D, NM, CM>,
     D,
 >;
 
 #[cfg(feature = "contact_suppression")]
-pub type CgrSupressorNodeParentingHop<'id, NM, CM, D> =
-    Cgr<'id, NM, CM, Suppressor<'id, NodeParenting<'id, Hop>, NM, CM>, RoutingTable<'id, D>, D>;
+pub type CgrSupressorNodeParentingHop<'id, NM, CM, D> = Cgr<
+    'id,
+    NM,
+    CM,
+    Suppressor<'id, NodeParenting<'id, Hop>, NM, CM>,
+    RoutingTable<'id, D, NM, CM>,
+    D,
+>;
 
 #[cfg(feature = "contact_suppression")]
 pub type CgrSupressorContactParentingHop<'id, NM, CM, D> = Cgr<
@@ -114,7 +126,7 @@ pub type CgrSupressorContactParentingHop<'id, NM, CM, D> = Cgr<
     NM,
     CM,
     Suppressor<'id, ContactParenting<'id, NM, CM, Hop>, NM, CM>,
-    RoutingTable<'id, D>,
+    RoutingTable<'id, D, NM, CM>,
     D,
 >;
 

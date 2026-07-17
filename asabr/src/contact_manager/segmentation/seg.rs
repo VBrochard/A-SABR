@@ -113,11 +113,11 @@ impl ContactManager for SegmentationManager {
 
             let (d_start, d_end) = super::get_delays(tx_start, tx_end, &self.delay_intervals);
             return Some(ContactManagerTxData {
-                tx_window: TimeInterval {
+                send: TimeInterval {
                     start: tx_start,
                     end: tx_end,
                 },
-                rx_window: TimeInterval {
+                recv: TimeInterval {
                     start: tx_start + d_start,
                     end: tx_end + d_end,
                 },
@@ -145,8 +145,8 @@ impl ContactManager for SegmentationManager {
         tx_data: ContactManagerTxData,
         _bundle: &Bundle,
     ) -> Result<(), ASABRError> {
-        let tx_start = tx_data.tx_window.start;
-        let tx_end = tx_data.tx_window.end;
+        let tx_start = tx_data.send.start;
+        let tx_end = tx_data.send.end;
 
         let index = self
             .free_intervals

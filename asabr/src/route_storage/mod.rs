@@ -23,7 +23,7 @@ use crate::{
 /// This trait defines methods for loading and storing pathfinding output
 /// related to routes in a routing system. Implementers of this trait must
 /// provide their own logic for handling route data.
-pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> {
+pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id, NM, CM>> {
     /// Loads a stored pathfinding output for a bundle and destination.
     ///
     /// # Parameters
@@ -66,8 +66,8 @@ pub trait PathsStorage<'id, NM: NodeManager, CM: ContactManager, D: Destination<
 /// Path storage implementation that never reuses routes.
 pub struct NoStorage;
 
-impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage<'id, NM, CM, D>
-    for NoStorage
+impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id, NM, CM>>
+    PathsStorage<'id, NM, CM, D> for NoStorage
 {
     fn select<'a>(
         &'a mut self,
@@ -99,7 +99,7 @@ pub struct Cached<
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
-    D: Destination<'id>,
+    D: Destination<'id, NM, CM>,
 > {
     cache: S,
     pathfinder: P,
@@ -112,7 +112,7 @@ impl<
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
-    D: Destination<'id>,
+    D: Destination<'id, NM, CM>,
 > Pathfinding<'id, NM, CM, D> for Cached<'id, S, P, NM, CM, D>
 {
     fn find_path<'a>(
@@ -164,7 +164,7 @@ impl<
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
-    D: Destination<'id>,
+    D: Destination<'id, NM, CM>,
 > Cached<'id, S, P, NM, CM, D>
 {
     /// Creates a cached pathfinder from storage and an inner pathfinder.
@@ -183,7 +183,7 @@ impl<
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
-    D: Destination<'id>,
+    D: Destination<'id, NM, CM>,
     A,
     B,
 > From<(&Multigraph<'id, NM, CM>, (A, B))> for Cached<'id, S, P, NM, CM, D>
@@ -198,12 +198,20 @@ where
 
 /// A Guard to avoid searching a path when useless. Bundles prio will be capped at prio_count (set to 1 to ignore bundles priorities)
 #[derive(Debug, Default)]
-pub struct Guard<'id, D: Destination<'id>, const PRIO_COUNT: usize> {
+pub struct Guard<
+    'id,
+    D: Destination<'id, NM, CM>,
+    const PRIO_COUNT: usize,
+    NM: NodeManager,
+    CM: ContactManager,
+> {
     limits: BTreeMap<usize, [Option<Volume>; PRIO_COUNT]>,
-    _phantom: PhantomData<fn(&'id (), D)>,
+    _phantom: PhantomData<fn(&'id (), D, NM, CM)>,
 }
 
-impl<'id, const PRIO_COUNT: usize, D: Destination<'id>> Guard<'id, D, PRIO_COUNT> {
+impl<'id, const PRIO_COUNT: usize, D: Destination<'id, NM, CM>, NM: NodeManager, CM: ContactManager>
+    Guard<'id, D, PRIO_COUNT, NM, CM>
+{
     /// Creates an empty guard.
     pub fn new() -> Self {
         Self {
@@ -212,12 +220,7 @@ impl<'id, const PRIO_COUNT: usize, D: Destination<'id>> Guard<'id, D, PRIO_COUNT
         }
     }
     /// Records an unsuccessful route size limit for a destination.
-    pub fn set_limit(
-        &mut self,
-        bundle: &Bundle,
-        dest: &D,
-        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
-    ) {
+    pub fn set_limit(&mut self, bundle: &Bundle, dest: &D, graph: &Multigraph<'id, NM, CM>) {
         let Some(id) = dest.to_id(graph) else {
             return;
         };
@@ -227,12 +230,7 @@ impl<'id, const PRIO_COUNT: usize, D: Destination<'id>> Guard<'id, D, PRIO_COUNT
         }
     }
     /// Returns whether route search can be skipped for the bundle and destination.
-    pub fn abort(
-        &self,
-        bundle: &Bundle,
-        dest: &D,
-        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
-    ) -> bool {
+    pub fn abort(&self, bundle: &Bundle, dest: &D, graph: &Multigraph<'id, NM, CM>) -> bool {
         let Some(id) = dest.to_id(graph) else {
             return false;
         };
@@ -244,17 +242,18 @@ impl<'id, const PRIO_COUNT: usize, D: Destination<'id>> Guard<'id, D, PRIO_COUNT
     }
 }
 
-/// A guarded PathFinder. Once a node is marked as unreachable, never try to find a path to it again. Rely on the destination .into_id() implementation
+/// A guarded PathFinder. Once a node is marked as unreachable, never try to find a path to it again. (If bundle is larger and less prioritary)
+/// Rely on the destination .into_id() implementation
 pub struct Guarded<
     'id,
     const PRIO_COUNT: usize,
     P: Pathfinding<'id, NM, CM, D>,
-    D: Destination<'id>,
+    D: Destination<'id, NM, CM>,
     NM: NodeManager,
     CM: ContactManager,
 > {
     finder: P,
-    guard: Guard<'id, D, PRIO_COUNT>,
+    guard: Guard<'id, D, PRIO_COUNT, NM, CM>,
     _phantom: PhantomData<fn(CM, NM)>,
 }
 
@@ -262,7 +261,7 @@ impl<
     'id,
     const PRIO_COUNT: usize,
     P: Pathfinding<'id, NM, CM, D>,
-    D: Destination<'id>,
+    D: Destination<'id, NM, CM>,
     NM: NodeManager,
     CM: ContactManager,
 > Guarded<'id, PRIO_COUNT, P, D, NM, CM>
@@ -282,7 +281,7 @@ impl<
     P: Pathfinding<'id, NM, CM, D>,
     NM: NodeManager,
     CM: ContactManager,
-    D: Destination<'id>,
+    D: Destination<'id, NM, CM>,
     T,
     const PC: usize,
 > From<(&Multigraph<'id, NM, CM>, T)> for Guarded<'id, PC, P, D, NM, CM>
@@ -298,7 +297,7 @@ impl<
     'id,
     const PRIO_COUNT: usize,
     P: Pathfinding<'id, NM, CM, D>,
-    D: Destination<'id>,
+    D: Destination<'id, NM, CM>,
     NM: NodeManager,
     CM: ContactManager,
 > Pathfinding<'id, NM, CM, D> for Guarded<'id, PRIO_COUNT, P, D, NM, CM>

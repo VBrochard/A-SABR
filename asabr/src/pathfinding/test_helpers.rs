@@ -94,7 +94,7 @@ impl NodeManager for MockNodeManager {
         Ok(())
     }
 
-    fn delay(
+    fn process_delay(
         &self,
         _bundle: &Bundle,
         _reception: crate::types::TimeInterval,

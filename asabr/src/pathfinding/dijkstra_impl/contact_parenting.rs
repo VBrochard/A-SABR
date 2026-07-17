@@ -204,7 +204,7 @@ mod tests {
 
         let dest_id_2: usize = ref_2.into();
         let path_hop = res_hop[dest_id_2].as_ref().unwrap();
-        assert_eq!(path_hop.arrival_time.end, 4, "Hop: Expected arrival 4");
+        assert_eq!(path_hop.recv.end, 4, "Hop: Expected arrival 4");
         assert_eq!(path_hop.hop_count, 2, "Hop: Expected 2 hops");
 
         let mut algo_sabr = ContactParenting::<NoManagement, EVLManager, SABR>::new();
@@ -214,7 +214,7 @@ mod tests {
             .expect("SABR: Routing Failed!");
 
         let path_sabr = res_sabr[dest_id_2].as_ref().unwrap();
-        assert_eq!(path_sabr.arrival_time.end, 4, "SABR: Expected arrival 4");
+        assert_eq!(path_sabr.recv.end, 4, "SABR: Expected arrival 4");
         assert_eq!(path_sabr.hop_count, 2, "SABR: Expected 2 hops");
 
         Ok(())
@@ -353,7 +353,7 @@ mod tests {
 
         let path_hop = res_hop[2].as_ref().unwrap();
         assert_eq!(
-            path_hop.arrival_time.end, 11,
+            path_hop.recv.end, 11,
             "Hop: Expected arrival 11 via direct path"
         );
         assert_eq!(path_hop.hop_count, 1, "Hop: Expected 1 hop");
@@ -365,10 +365,7 @@ mod tests {
             .expect("SABR: Routing Failed!");
 
         let path_sabr = res_sabr[2].as_ref().unwrap();
-        assert_eq!(
-            path_sabr.arrival_time.end, 4,
-            "SABR: Expected arrival 4 via B"
-        );
+        assert_eq!(path_sabr.recv.end, 4, "SABR: Expected arrival 4 via B");
         assert_eq!(path_sabr.hop_count, 2, "SABR: Expected 2 hops");
 
         Ok(())
@@ -406,7 +403,7 @@ mod tests {
 
         let dest_id: usize = ref_3.into();
         let path_hop = res_hop[dest_id].as_ref().unwrap();
-        assert_eq!(path_hop.arrival_time.end, 30, "Hop: Expected arrival 30");
+        assert_eq!(path_hop.recv.end, 30, "Hop: Expected arrival 30");
         assert_eq!(path_hop.hop_count, 2, "Hop: Expected 2 hops");
 
         let mut algo_sabr = ContactParenting::<NoManagement, EVLManager, SABR>::new();
@@ -416,7 +413,7 @@ mod tests {
             .expect("SABR: Routing Failed!");
 
         let path_sabr = res_sabr[dest_id].as_ref().unwrap();
-        assert_eq!(path_sabr.arrival_time.end, 30, "SABR: Expected arrival 30");
+        assert_eq!(path_sabr.recv.end, 30, "SABR: Expected arrival 30");
         assert_eq!(
             path_sabr.hop_count, 2,
             "SABR: Expected 2 hops for contact graph tie-break"
@@ -459,7 +456,7 @@ mod tests {
 
         let dest_id: usize = ref_4.into();
         let path_hop = res_hop[dest_id].as_ref().unwrap();
-        assert_eq!(path_hop.arrival_time.end, 50, "Hop: Expected arrival 50");
+        assert_eq!(path_hop.recv.end, 50, "Hop: Expected arrival 50");
         assert_eq!(path_hop.hop_count, 3, "Hop: Expected 3 hops");
 
         let mut algo_sabr = ContactParenting::<NoManagement, EVLManager, SABR>::new();
@@ -469,7 +466,7 @@ mod tests {
             .expect("SABR: Routing Failed!");
 
         let path_sabr = res_sabr[dest_id].as_ref().unwrap();
-        assert_eq!(path_sabr.arrival_time.end, 50, "SABR: Expected arrival 50");
+        assert_eq!(path_sabr.recv.end, 50, "SABR: Expected arrival 50");
         assert_eq!(path_sabr.hop_count, 4, "SABR: Expected 4 hops");
 
         Ok(())

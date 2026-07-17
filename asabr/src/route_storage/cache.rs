@@ -44,8 +44,8 @@ impl<'id, NM: NodeManager, CM: ContactManager> From<(&Multigraph<'id, NM, CM>, u
     }
 }
 
-impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> PathsStorage<'id, NM, CM, D>
-    for TreeCache<'id, NM, CM>
+impl<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id, NM, CM>>
+    PathsStorage<'id, NM, CM, D> for TreeCache<'id, NM, CM>
 {
     fn select<'a>(
         &'a mut self,

@@ -1,4 +1,3 @@
-use core::cell::{BorrowError, BorrowMutError};
 use core::error::Error;
 use core::fmt;
 
@@ -7,9 +6,6 @@ use crate::parsing::Located;
 #[derive(Debug)]
 /// Error type used by A-SABR operations.
 pub enum ASABRError {
-    /// Returned when a mutable borrow fails.
-    BorrowMutError(&'static str),
-
     /// Returned when a dry-run operation fails.
     DryRunError(&'static str),
 
@@ -26,22 +22,9 @@ pub enum ASABRError {
     ParsingError(Located<&'static str>),
 }
 
-impl From<BorrowError> for ASABRError {
-    fn from(_: BorrowError) -> Self {
-        ASABRError::BorrowMutError("borrow error occurred")
-    }
-}
-
-impl From<BorrowMutError> for ASABRError {
-    fn from(_: BorrowMutError) -> Self {
-        ASABRError::BorrowMutError("mutable borrow error occurred")
-    }
-}
-
 impl fmt::Display for ASABRError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            ASABRError::BorrowMutError(s) => write!(f, "BorrowMutError in A-SABR: {}", s),
             ASABRError::DryRunError(s) => write!(f, "DryRunError in A-SABR: {}", s),
             ASABRError::ScheduleError(s) => write!(f, "ScheduleError in A-SABR: {}", s),
             ASABRError::ContactPlanError(s) => write!(f, "ContactPlanError in A-SABR: {}", s),

@@ -55,7 +55,7 @@ pub trait NodeManager {
     /// transmission-side delays.
     ///
     /// `next_vertex` may identify a virtual node.
-    fn delay(
+    fn process_delay(
         &self,
         bundle: &Bundle,
         reception: TimeInterval,
@@ -126,14 +126,14 @@ impl<T: AsRef<dyn NodeManager> + AsMut<dyn NodeManager>> NodeManager for T {
         self.as_ref().accept(bundle, time, sender)
     }
 
-    fn delay(
+    fn process_delay(
         &self,
         bundle: &Bundle,
         reception: TimeInterval,
         sender: NodeID,
         next: NodeID,
     ) -> Date {
-        self.as_ref().delay(bundle, reception, sender, next)
+        self.as_ref().process_delay(bundle, reception, sender, next)
     }
 
     fn dry_run_retention(
@@ -179,14 +179,14 @@ macro_rules! transparent_NM {
                 self.0.accept(bundle, time, sender)
             }
 
-            fn delay(
+            fn process_delay(
                 &self,
                 bundle: &Bundle,
                 reception: TimeInterval,
                 sender: NodeID,
                 next: NodeID,
             ) -> Date {
-                self.0.delay(bundle, reception, sender, next)
+                self.0.process_delay(bundle, reception, sender, next)
             }
 
             fn dry_run_retention(

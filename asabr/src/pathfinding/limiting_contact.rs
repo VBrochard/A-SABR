@@ -19,9 +19,8 @@ use crate::types::Date;
 /// Have unspecified behavior on NaN
 #[cfg(feature = "first_depleted")]
 pub fn had_less_volume_than<CM: ContactManager>(a: &Contact<CM>, b: &Contact<CM>) -> Ordering {
-    a.manager
-        .get_original_volume()
-        .partial_cmp(&b.manager.get_original_volume())
+    a.get_original_volume()
+        .partial_cmp(&b.get_original_volume())
         .unwrap_or(Ordering::Equal)
         .reverse()
 }

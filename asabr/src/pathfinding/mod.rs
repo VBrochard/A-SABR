@@ -208,7 +208,10 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
         let path = unsafe { self.get_path_mut(graph.routable_to_usize(dest)) };
         path.is_some_and(|mut path| {
             let mut last_node = None;
-            if let Some(PathFragment { arrival_time, .. }) = path.first_mut() {
+            if let Some(PathFragment {
+                recv: arrival_time, ..
+            }) = path.first_mut()
+            {
                 *arrival_time = TimeInterval {
                     start: time,
                     end: time,
@@ -216,29 +219,46 @@ impl<'id, 'a> PathFindingOutput<'id, 'a> {
             }
             let mut idx = 0;
             while let Ok([fst, snd]) = path.get_disjoint_mut([idx, idx + 1]) {
+                if graph[fst.rx_node].info.excluded {
+                    return false;
+                }
                 let time = match last_node {
-                    Some(nodeid) => graph[fst.rx_node].manager.delay(
+                    Some(nodeid) => graph[fst.rx_node].manager.process_delay(
                         bundle,
-                        fst.arrival_time,
+                        fst.recv,
                         nodeid,
                         graph.into_nodeid(snd.rx_node.into()),
                     ),
                     None => time,
                 };
                 let ct = snd.via.as_mut().unwrap();
-                let tx_data =
-                    graph[ct.contact]
-                        .manager
-                        .dry_run_tx(graph[ct.contact].lifespan, time, bundle);
+                let tx_data = graph[ct.contact].dry_run_tx(time, bundle);
                 match tx_data {
                     None => return false,
                     Some(tx_data) => {
-                        ct.tx_time = tx_data.tx_window;
-                        snd.arrival_time = tx_data.rx_window;
+                        ct.send = tx_data.send;
+                        snd.recv = tx_data.recv;
                     }
+                }
+                if let Some(nodeid) = last_node
+                    && !graph[fst.rx_node].manager.dry_run_retention(
+                        bundle,
+                        fst.recv,
+                        nodeid,
+                        ct.send,
+                        graph.into_nodeid(snd.rx_node.into()),
+                    )
+                {
+                    return false;
                 }
                 last_node = Some(graph.into_nodeid(fst.rx_node.into()));
                 idx += 1
+            }
+            if let (Some(last), Some(prev)) = (path.last_mut(), last_node)
+                && (!graph[last.rx_node].manager.accept(bundle, last.recv, prev)
+                    || graph[last.rx_node].info.excluded)
+            {
+                return false;
             }
             true
         })
@@ -282,7 +302,7 @@ impl<'id, 'a, T: AsRef<PathFindingOutput<'id, 'a>>> PathIterator<'id, 'a, T> {
 
         multigraph[last.rx_node].manager.commit(
             bundle,
-            last.arrival_time,
+            last.recv,
             // Not the last => only internal node
             unsafe { prev.rx_node.internal().unwrap_unchecked() }.into(),
             &[],
@@ -290,12 +310,10 @@ impl<'id, 'a, T: AsRef<PathFindingOutput<'id, 'a>>> PathIterator<'id, 'a, T> {
         while let Some(curr) = iter.next() {
             // Not the first => via exist
             let last_via = unsafe { last.via.unwrap_unchecked() };
-            let contact = &mut multigraph[last_via.contact];
-            contact.manager.schedule_tx(
-                contact.lifespan,
+            multigraph[last_via.contact].schedule_tx(
                 ContactManagerTxData {
-                    tx_window: last_via.tx_time,
-                    rx_window: last.arrival_time,
+                    send: last_via.send,
+                    recv: last.recv,
                 },
                 bundle,
             )?;
@@ -307,11 +325,11 @@ impl<'id, 'a, T: AsRef<PathFindingOutput<'id, 'a>>> PathIterator<'id, 'a, T> {
                     .manager
                     .commit(
                         bundle,
-                        curr.arrival_time,
+                        curr.recv,
                         // Not the last => only internal node
                         unsafe { prev.rx_node.internal().unwrap_unchecked().into() },
                         // Not the first => via exist
-                        &[(last_via.tx_time, last_nodeid)],
+                        &[(last_via.send, last_nodeid)],
                     )?;
                 last = curr;
             }
@@ -330,14 +348,14 @@ where
             writeln!(
                 f,
                 "Route to {} at t={} with {} hop(s):",
-                last.rx_node, last.arrival_time.end, last.hop_count
+                last.rx_node, last.recv.end, last.hop_count
             )?;
         };
         for frag in copy {
             writeln!(
                 f,
                 "        - Reach node {} at t={} with {} hop(s)",
-                frag.rx_node, frag.arrival_time.end, frag.hop_count
+                frag.rx_node, frag.recv.end, frag.hop_count
             )?;
         }
         Ok(())
@@ -351,7 +369,13 @@ where
 ///
 /// * `NM` - A generic type that implements the `NodeManager` trait.
 /// * `CM` - A generic type that implements the `ContactManager` trait.
-pub trait Pathfinding<'id, NM: NodeManager, CM: ContactManager, D: Destination<'id>> {
+pub trait Pathfinding<
+    'id,
+    NM: NodeManager,
+    CM: ContactManager,
+    D: Destination<'id, NM, CM> + ?Sized,
+>
+{
     /// Determines the routing tree in the multigraph for the given bundle.
     /// Populate the routes until the destination is reached.
     /// The bundle will be launched at `routing_time`, and old contacts in the graph may be ellided if they are older than `prune_time`.
@@ -416,10 +440,10 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
     }
 
     let send_time = match previous_node {
-        None => last_hop.0.arrival_time.end,
-        Some(tx_node) => graph[current_node].manager.delay(
+        None => last_hop.0.recv.end,
+        Some(tx_node) => graph[current_node].manager.process_delay(
             bundle,
-            last_hop.0.arrival_time,
+            last_hop.0.recv,
             tx_node.into(),
             neigbhoor_id,
         ),
@@ -448,19 +472,19 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
                 .dry_run_tx(ct.as_ref().lifespan, send_time, bundle)
         {
             if let Some(Best { receive, .. }) = best
-                && receive.end < txdata.rx_window.end
+                && receive.end < txdata.recv.end
             {
                 continue;
             }
-            if !next_node_manager.accept(bundle, txdata.rx_window, current_node.into()) {
+            if !next_node_manager.accept(bundle, txdata.recv, current_node.into()) {
                 continue;
             }
             if let Some(previous) = previous_node
                 && !graph[current_node].manager.dry_run_retention(
                     bundle,
-                    last_hop.0.arrival_time,
+                    last_hop.0.recv,
                     previous.into(),
-                    txdata.tx_window,
+                    txdata.send,
                     neigbhoor_id,
                 )
             {
@@ -470,9 +494,9 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
             }
             best = Some(Best {
                 contact: ctref,
-                receive: txdata.rx_window,
+                receive: txdata.recv,
                 dest: next_node_ref,
-                send: txdata.tx_window,
+                send: txdata.send,
                 expiration: ct.as_ref().lifespan.end,
             })
         }
@@ -489,11 +513,11 @@ fn try_make_hop<'id, 'a, NM: NodeManager + 'a, CM: ContactManager, T: AsRef<Cont
             via: Some(ViaHop {
                 contact,
                 parent_frag: last_hop.1,
-                tx_time: send,
+                send,
             }),
             hop_count: last_hop.0.hop_count + 1,
             rx_node: dest,
-            arrival_time: receive,
+            recv: receive,
             expiration: expiration.min(last_hop.0.expiration),
         },
     )
@@ -724,9 +748,9 @@ mod tests {
         );
         let route = result.unwrap();
         assert_eq!(
-            route.arrival_time.end, 3,
+            route.recv.end, 3,
             "TEST FAILED: Expected arrival 3 from non-suppressed contact (got {}).",
-            route.arrival_time.end
+            route.recv.end
         );
         Ok(())
     }
@@ -901,9 +925,9 @@ mod tests {
         // Contact Delay = 1
         // Arrival = Send Time(2) + Duration(1) + Delay(1) = 4
         assert_eq!(
-            route.arrival_time.end, 4,
+            route.recv.end, 4,
             "TEST FAILED: Arrival should account for the 2s node processing delay (expected 4, got {}).",
-            route.arrival_time.end
+            route.recv.end
         );
     }
 
@@ -956,9 +980,9 @@ mod tests {
         // Delay = 2
         // Arrival = 5 + 1 + 2 = 8
         assert_eq!(
-            route.arrival_time.end, 8,
+            route.recv.end, 8,
             "TEST FAILED: Expected arrival 8 from the optimal contact (got {}).",
-            route.arrival_time.end
+            route.recv.end
         );
         assert_eq!(
             route.hop_count, 1,
@@ -1017,9 +1041,9 @@ mod tests {
         // Verification hop 1
         // Tx Duration = 100 / 100 = 1. Delay = 1 (Contact A). Arrival = 2.
         assert_eq!(
-            hop1.arrival_time.end, 2,
+            hop1.recv.end, 2,
             "Hop 1 FAILED: Expected arrival 2 (got {}).",
-            hop1.arrival_time.end
+            hop1.recv.end
         );
         assert_eq!(
             hop1.hop_count, 1,
@@ -1052,9 +1076,9 @@ mod tests {
         // Start time = Hop 1 Arrival = 2
         // Tx Duration = 100 / 100 = 1. Delay = 1 (Contact C). Arrival = 2 + 1 + 1 = 4.
         assert_eq!(
-            hop2.arrival_time.end, 4,
+            hop2.recv.end, 4,
             "Hop 2 FAILED: Expected arrival 4 (got {}).",
-            hop2.arrival_time.end
+            hop2.recv.end
         );
         assert_eq!(
             hop2.hop_count, 2,

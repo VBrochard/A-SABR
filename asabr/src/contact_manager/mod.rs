@@ -23,9 +23,9 @@ pub mod segmentation;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ContactManagerTxData {
     /// Timespan necessary to send all the data.
-    pub tx_window: TimeInterval,
+    pub send: TimeInterval,
     /// Timespan during wich data are received.
-    pub rx_window: TimeInterval,
+    pub recv: TimeInterval,
 }
 
 /// Trait for managing contact resources and scheduling data transmissions.

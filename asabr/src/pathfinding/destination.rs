@@ -1,18 +1,19 @@
 extern crate alloc;
 use crate::{
     bundle::Bundle,
-    contact_manager::ContactManager,
+    contact_manager::{ContactManager, ContactManagerTxData},
     errors::ASABRError,
     multigraph::{INodeRef, Multigraph, NodeRef, RoutableNodeRef, VNodeRef},
-    node_manager::NodeManager,
-    pathfinding::{PathFindingOutput, PathIterator},
+    node_manager::{NodeManager, none::NoManagement},
+    parsing::Either,
+    pathfinding::{PathFindingOutput, PathIterator, Pathfinding},
     paths::PathFragment,
     types::Date,
 };
-use alloc::{boxed::Box, rc::Rc};
+use alloc::{boxed::Box, rc::Rc, vec};
 
 /// Describes when a pathfinding search has reached its destination.
-pub trait Destination<'id> {
+pub trait Destination<'id, NM: NodeManager, CM: ContactManager> {
     /// A new pathfinding begin, reinit to a state of no reachable nodes
     fn reinit(&mut self);
     /// This node have been poped from disktra prio_queue, should we stop ?
@@ -28,22 +29,22 @@ pub trait Destination<'id> {
         paths: &mut PathFindingOutput<'id, '_>,
         time: Date,
         bundle: &Bundle,
-        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
+        graph: &Multigraph<'id, NM, CM>,
     ) -> bool;
     /// Some pathfinder can provide performance improvement if this return Some
     /// Returning the same id for two different destination may however prevent the pathfinder from finding the best path (or a path at all)
-    fn to_id(
-        &self,
-        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
-    ) -> Option<usize>;
+    fn to_id(&self, graph: &Multigraph<'id, NM, CM>) -> Option<usize>;
     type RoutingOutput<'a>
     where
         'id: 'a;
     fn route<'a>(
         &mut self,
-        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+        graph: &mut Multigraph<'id, NM, CM>,
         bundle: &Bundle,
-        route: PathFindingOutput<'id, 'a>,
+        finder: &'a mut impl Pathfinding<'id, NM, CM, Self>,
+        routing_time: Date,
+        source: INodeRef<'id>,
+        prune_time: Option<i64>,
     ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError>;
 }
 
@@ -61,7 +62,27 @@ pub enum Dest<'id> {
     MultiCast(Rc<[INodeRef<'id>]>, Box<[bool]>, usize),
 }
 
-impl<'id> Destination<'id> for Dest<'id> {
+pub fn classical_route<'id, 'a>(
+    path: Option<PathFindingOutput<'id, 'a>>,
+    dest: impl Into<RoutableNodeRef<'id>> + Copy,
+    bundle: &Bundle,
+    graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+) -> Result<
+    Option<(
+        PathIterator<'id, 'a, PathFindingOutput<'id, 'a>>,
+        PathFragment<'id>,
+    )>,
+    ASABRError,
+> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let last = path.commit_path_to(dest.into(), bundle, graph)?;
+    let path = path.full_path_rev_owned(dest.into(), graph);
+    Ok(path.zip(last))
+}
+
+impl<'id, CM: ContactManager> Destination<'id, NoManagement, CM> for Dest<'id> {
     fn reinit(&mut self) {
         if let Self::MultiCast(_, reached, counter) = self {
             for r in reached.iter_mut() {
@@ -106,7 +127,7 @@ impl<'id> Destination<'id> for Dest<'id> {
         paths: &mut PathFindingOutput<'id, '_>,
         time: Date,
         bundle: &Bundle,
-        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
+        graph: &Multigraph<'id, NoManagement, CM>,
     ) -> bool {
         unsafe {
             match self {
@@ -116,41 +137,121 @@ impl<'id> Destination<'id> for Dest<'id> {
                 Dest::VNode(vnode_ref) => {
                     paths.validate(RoutableNodeRef::V(*vnode_ref), time, bundle, graph)
                 }
-                Dest::AllNodes() => true,
+                Dest::AllNodes() => All::validate(&All, paths, time, bundle, graph),
                 Dest::AnyCast(rnode_refs) => rnode_refs
                     .iter()
                     .any(|dest| paths.validate(RoutableNodeRef::I(*dest), time, bundle, graph)),
                 Dest::MultiCast(rnode_refs, _items, _) => rnode_refs
                     .iter()
                     // This path is not technically fully valid, but hey, it is still interesting, so we want to extract it
-                    .any(|dest| paths.validate(RoutableNodeRef::I(*dest), time, bundle, graph)),
+                    .all(|dest| paths.validate(RoutableNodeRef::I(*dest), time, bundle, graph)),
             }
         }
     }
 
-    fn to_id(
-        &self,
-        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
-    ) -> Option<usize> {
+    fn to_id(&self, graph: &Multigraph<'id, NoManagement, CM>) -> Option<usize> {
         match self {
             Dest::INode(rnode_ref) => Some((*rnode_ref).into()),
             Dest::VNode(vnode_ref) => Some(graph.routable_to_usize((*vnode_ref).into())),
-            Dest::AllNodes() => Some(graph.get_routable_count()),
+            Dest::AllNodes() => None,
             Dest::AnyCast(_rnode_refs) => None,
             Dest::MultiCast(..) => None,
         }
     }
     type RoutingOutput<'a>
-        = ()
+        = Either<
+        (
+            PathIterator<'id, 'a, PathFindingOutput<'id, 'a>>,
+            PathFragment<'id>,
+        ),
+        (),
+    >
     where
         'id: 'a;
-    fn route(
+    fn route<'a>(
         &mut self,
-        _graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
-        _bundle: &Bundle,
-        _route: PathFindingOutput<'id, '_>,
-    ) -> Result<Option<Self::RoutingOutput<'_>>, ASABRError> {
-        todo!()
+        graph: &mut Multigraph<'id, NoManagement, CM>,
+        bundle: &Bundle,
+        finder: &'a mut impl Pathfinding<'id, NoManagement, CM, Self>,
+        routing_time: Date,
+        source: INodeRef<'id>,
+        prune_time: Option<i64>,
+    ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError> {
+        let path = finder.find_path(graph, routing_time, source, bundle, self, prune_time)?;
+        match self {
+            Dest::INode(inode_ref) => {
+                classical_route(path, *inode_ref, bundle, graph).map(|o| o.map(Either::Left))
+            }
+            Dest::VNode(vnode_ref) => {
+                classical_route(path, *vnode_ref, bundle, graph).map(|o| o.map(Either::Left))
+            }
+            Dest::AllNodes() => todo!(),
+            Dest::AnyCast(_inode_refs) => todo!(),
+            Dest::MultiCast(inode_refs, _, counter) => {
+                if path.is_none() || *counter == 0 {
+                    return Ok(None);
+                }
+                let mut pathtree = path.unwrap().into_owned();
+                let mut collect = vec![None; graph.get_internal_count()].into_boxed_slice();
+                for node in inode_refs.iter() {
+                    let mut next: usize = (*node).into();
+                    while let Some(PathFragment {
+                        via,
+                        recv: arrival_time,
+                        rx_node,
+                        ..
+                    }) = pathtree[next]
+                    {
+                        let opt = &mut collect[usize::from(rx_node.internal().unwrap())];
+                        if opt.is_none_or(|(time, _old)| time > arrival_time.end) {
+                            *opt = Some((arrival_time.end, next));
+                            match via {
+                                Some(via) => next = via.parent_frag,
+                                None => break,
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                for (place, opt) in collect.into_iter().enumerate() {
+                    let new = if let Some((_, effective)) = opt {
+                        let mut new = unsafe { pathtree[effective].unwrap_unchecked() };
+                        if let Some(via) = &mut new.via {
+                            via.parent_frag = unsafe {
+                                pathtree[via.parent_frag]
+                                    .unwrap_unchecked()
+                                    .rx_node
+                                    .internal()
+                                    .unwrap_unchecked()
+                                    .into()
+                            };
+                            graph[via.contact].schedule_tx(
+                                ContactManagerTxData {
+                                    send: via.send,
+                                    recv: new.recv,
+                                },
+                                bundle,
+                            )?;
+                        }
+                        Some(new)
+                    } else {
+                        None
+                    };
+
+                    pathtree[place] = new;
+                }
+                if let PathFindingOutput {
+                    path_tree: Either::Right(vec),
+                } = &mut pathtree
+                {
+                    vec.truncate(graph.get_routable_count());
+                    vec.shrink_to_fit();
+                }
+                for _node in inode_refs.iter() {}
+                todo!()
+            }
+        }
     }
 }
 
@@ -199,7 +300,7 @@ impl<'id> Dest<'id> {
     }
 }
 
-impl<'id> Destination<'id> for INodeRef<'id> {
+impl<'id, NM: NodeManager, CM: ContactManager> Destination<'id, NM, CM> for INodeRef<'id> {
     #[inline(always)]
     fn reinit(&mut self) {}
 
@@ -218,15 +319,12 @@ impl<'id> Destination<'id> for INodeRef<'id> {
         paths: &mut PathFindingOutput<'id, '_>,
         time: Date,
         bundle: &Bundle,
-        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
+        graph: &Multigraph<'id, NM, CM>,
     ) -> bool {
         unsafe { paths.validate(RoutableNodeRef::I(*self), time, bundle, graph) }
     }
 
-    fn to_id(
-        &self,
-        _graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
-    ) -> Option<usize> {
+    fn to_id(&self, _graph: &Multigraph<'id, NM, CM>) -> Option<usize> {
         Some((*self).into())
     }
     type RoutingOutput<'a>
@@ -238,17 +336,19 @@ impl<'id> Destination<'id> for INodeRef<'id> {
         'id: 'a;
     fn route<'a>(
         &mut self,
-        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+        graph: &mut Multigraph<'id, NM, CM>,
         bundle: &Bundle,
-        route: PathFindingOutput<'id, 'a>,
+        finder: &'a mut impl Pathfinding<'id, NM, CM, Self>,
+        routing_time: Date,
+        source: INodeRef<'id>,
+        prune_time: Option<i64>,
     ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError> {
-        let last = route.commit_path_to((*self).into(), bundle, graph)?;
-        let iter = route.full_path_rev_owned((*self).into(), graph);
-        Ok(iter.zip(last))
+        let path = finder.find_path(graph, routing_time, source, bundle, self, prune_time)?;
+        classical_route(path, *self, bundle, graph)
     }
 }
 
-impl<'id> Destination<'id> for VNodeRef<'id> {
+impl<'id, NM: NodeManager, CM: ContactManager> Destination<'id, NM, CM> for VNodeRef<'id> {
     #[inline(always)]
     fn reinit(&mut self) {}
 
@@ -267,15 +367,12 @@ impl<'id> Destination<'id> for VNodeRef<'id> {
         paths: &mut PathFindingOutput<'id, '_>,
         time: Date,
         bundle: &Bundle,
-        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
+        graph: &Multigraph<'id, NM, CM>,
     ) -> bool {
         unsafe { paths.validate(RoutableNodeRef::V(*self), time, bundle, graph) }
     }
 
-    fn to_id(
-        &self,
-        _graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
-    ) -> Option<usize> {
+    fn to_id(&self, _graph: &Multigraph<'id, NM, CM>) -> Option<usize> {
         Some((*self).into())
     }
     type RoutingOutput<'a>
@@ -287,17 +384,19 @@ impl<'id> Destination<'id> for VNodeRef<'id> {
         'id: 'a;
     fn route<'a>(
         &mut self,
-        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+        graph: &mut Multigraph<'id, NM, CM>,
         bundle: &Bundle,
-        route: PathFindingOutput<'id, 'a>,
+        finder: &'a mut impl Pathfinding<'id, NM, CM, Self>,
+        routing_time: Date,
+        source: INodeRef<'id>,
+        prune_time: Option<i64>,
     ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError> {
-        let last = route.commit_path_to((*self).into(), bundle, graph)?;
-        let iter = route.full_path_rev_owned((*self).into(), graph);
-        Ok(iter.zip(last))
+        let path = finder.find_path(graph, routing_time, source, bundle, self, prune_time)?;
+        classical_route(path, *self, bundle, graph)
     }
 }
 
-impl<'id> Destination<'id> for RoutableNodeRef<'id> {
+impl<'id, NM: NodeManager, CM: ContactManager> Destination<'id, NM, CM> for RoutableNodeRef<'id> {
     #[inline(always)]
     fn reinit(&mut self) {}
 
@@ -309,8 +408,12 @@ impl<'id> Destination<'id> for RoutableNodeRef<'id> {
     #[inline(always)]
     fn is_useful(&self, node: VNodeRef<'id>) -> bool {
         match self {
-            RoutableNodeRef::I(inode_ref) => inode_ref.is_useful(node),
-            RoutableNodeRef::V(vnode_ref) => vnode_ref.is_useful(node),
+            RoutableNodeRef::I(inode_ref) => {
+                <INodeRef as Destination<NM, CM>>::is_useful(inode_ref, node)
+            }
+            RoutableNodeRef::V(vnode_ref) => {
+                <VNodeRef as Destination<NM, CM>>::is_useful(vnode_ref, node)
+            }
         }
     }
     unsafe fn validate(
@@ -318,15 +421,12 @@ impl<'id> Destination<'id> for RoutableNodeRef<'id> {
         paths: &mut PathFindingOutput<'id, '_>,
         time: Date,
         bundle: &Bundle,
-        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
+        graph: &Multigraph<'id, NM, CM>,
     ) -> bool {
         unsafe { paths.validate(*self, time, bundle, graph) }
     }
 
-    fn to_id(
-        &self,
-        graph: &Multigraph<'id, impl NodeManager, impl ContactManager>,
-    ) -> Option<usize> {
+    fn to_id(&self, graph: &Multigraph<'id, NM, CM>) -> Option<usize> {
         Some(graph.routable_to_usize(*self))
     }
     type RoutingOutput<'a>
@@ -338,20 +438,22 @@ impl<'id> Destination<'id> for RoutableNodeRef<'id> {
         'id: 'a;
     fn route<'a>(
         &mut self,
-        graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
+        graph: &mut Multigraph<'id, NM, CM>,
         bundle: &Bundle,
-        route: PathFindingOutput<'id, 'a>,
+        finder: &'a mut impl Pathfinding<'id, NM, CM, Self>,
+        routing_time: Date,
+        source: INodeRef<'id>,
+        prune_time: Option<i64>,
     ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError> {
-        let last = route.commit_path_to(*self, bundle, graph)?;
-        let iter = route.full_path_rev_owned(*self, graph);
-        Ok(iter.zip(last))
+        let path = finder.find_path(graph, routing_time, source, bundle, self, prune_time)?;
+        classical_route(path, *self, bundle, graph)
     }
 }
 
 /// Destination that keeps searching all useful routable nodes.
 pub struct All;
 
-impl<'id> Destination<'id> for All {
+impl<'id, CM: ContactManager> Destination<'id, NoManagement, CM> for All {
     #[inline(always)]
     fn reinit(&mut self) {}
 
@@ -369,27 +471,28 @@ impl<'id> Destination<'id> for All {
         _paths: &mut PathFindingOutput<'_, '_>,
         _time: Date,
         _bundle: &Bundle,
-        _graph: &Multigraph<'_, impl NodeManager, impl ContactManager>,
+        _graph: &Multigraph<'_, NoManagement, CM>,
     ) -> bool {
         true
     }
 
-    fn to_id(
-        &self,
-        _graph: &Multigraph<'_, impl NodeManager, impl ContactManager>,
-    ) -> Option<usize> {
+    fn to_id(&self, _graph: &Multigraph<'_, NoManagement, CM>) -> Option<usize> {
         None
     }
     type RoutingOutput<'a>
-        = ()
+        = PathFindingOutput<'id, 'a>
     where
         'id: 'a;
     fn route<'a>(
         &mut self,
-        _graph: &mut Multigraph<'id, impl NodeManager, impl ContactManager>,
-        _bundle: &Bundle,
-        _route: PathFindingOutput<'id, 'a>,
+        graph: &mut Multigraph<'id, NoManagement, CM>,
+        bundle: &Bundle,
+        finder: &'a mut impl Pathfinding<'id, NoManagement, CM, Self>,
+        routing_time: Date,
+        source: INodeRef<'id>,
+        prune_time: Option<i64>,
     ) -> Result<Option<Self::RoutingOutput<'a>>, ASABRError> {
-        todo!()
+        let _ = finder.find_path(graph, routing_time, source, bundle, self, prune_time);
+        Ok(None)
     }
 }

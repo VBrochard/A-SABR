@@ -72,7 +72,7 @@ hop-first distance.
 
 ### Distances
 - SABR (Recommended, not specified in the aliases): Lexicographical order on (time,number of hop,expiration)
-- Hop : Lexicographical order on (number of hop,time). May be faster to calculate best routes for
+- Hop : Lexicographical order on (number of hop,time,expiration). May be faster to calculate best routes for
 
 ## Quick starts
 

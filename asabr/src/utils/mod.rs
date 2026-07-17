@@ -84,15 +84,20 @@ pub struct Router<
     NM: NodeManager,
     CM: ContactManager,
     P: Pathfinding<'id, NM, CM, D>,
-    D: Destination<'id>,
+    D: Destination<'id, NM, CM>,
 > {
     pub multigraph: Multigraph<'id, NM, CM>,
     pub pathfinder: P,
     _phantom: PhantomData<fn(D)>,
 }
 
-impl<'id, NM: NodeManager, CM: ContactManager, P: Pathfinding<'id, NM, CM, D>, D: Destination<'id>>
-    Router<'id, NM, CM, P, D>
+impl<
+    'id,
+    NM: NodeManager,
+    CM: ContactManager,
+    P: Pathfinding<'id, NM, CM, D>,
+    D: Destination<'id, NM, CM>,
+> Router<'id, NM, CM, P, D>
 {
     pub fn build<T>(
         guard: Guard<'id>,
@@ -159,23 +164,24 @@ impl<'id, NM: NodeManager, CM: ContactManager, P: Pathfinding<'id, NM, CM, D>, D
         bundle: &Bundle,
         prune_time: Option<Date>,
     ) -> Result<Option<D::RoutingOutput<'a>>, ASABRError> {
-        let route = self.pathfinder.find_path(
+        destination.route(
             &mut self.multigraph,
+            bundle,
+            &mut self.pathfinder,
             routing_time,
             source,
-            bundle,
-            &mut destination,
             prune_time,
-        )?;
-        let Some(route) = route else {
-            return Ok(None);
-        };
-        destination.route(&mut self.multigraph, bundle, route)
+        )
     }
 }
 
-impl<'id, NM: NodeManager, CM: ContactManager, P: Pathfinding<'id, NM, CM, D>, D: Destination<'id>>
-    Deref for Router<'id, NM, CM, P, D>
+impl<
+    'id,
+    NM: NodeManager,
+    CM: ContactManager,
+    P: Pathfinding<'id, NM, CM, D>,
+    D: Destination<'id, NM, CM>,
+> Deref for Router<'id, NM, CM, P, D>
 {
     type Target = Multigraph<'id, NM, CM>;
 
@@ -183,8 +189,13 @@ impl<'id, NM: NodeManager, CM: ContactManager, P: Pathfinding<'id, NM, CM, D>, D
         &self.multigraph
     }
 }
-impl<'id, NM: NodeManager, CM: ContactManager, P: Pathfinding<'id, NM, CM, D>, D: Destination<'id>>
-    DerefMut for Router<'id, NM, CM, P, D>
+impl<
+    'id,
+    NM: NodeManager,
+    CM: ContactManager,
+    P: Pathfinding<'id, NM, CM, D>,
+    D: Destination<'id, NM, CM>,
+> DerefMut for Router<'id, NM, CM, P, D>
 {
     fn deref_mut(&mut self) -> &mut <Router<'id, NM, CM, P, D> as Deref>::Target {
         &mut self.multigraph

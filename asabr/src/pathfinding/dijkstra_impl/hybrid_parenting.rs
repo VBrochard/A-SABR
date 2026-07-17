@@ -232,7 +232,7 @@ mod tests {
 
         let dest_id_2: usize = ref_2.into();
         let path_hop = res_hop[dest_id_2].as_ref().unwrap();
-        assert_eq!(path_hop.arrival_time.end, 4, "Hop: Expected arrival 4");
+        assert_eq!(path_hop.recv.end, 4, "Hop: Expected arrival 4");
         assert_eq!(path_hop.hop_count, 2, "Hop: Expected 2 hops");
 
         let mut algo_sabr = HybridParenting::<SABR, NoManagement, EVLManager>::new();
@@ -242,7 +242,7 @@ mod tests {
             .expect("SABR: Routing Failed!");
 
         let path_sabr = res_sabr[dest_id_2].as_ref().unwrap();
-        assert_eq!(path_sabr.arrival_time.end, 4, "SABR: Expected arrival 4");
+        assert_eq!(path_sabr.recv.end, 4, "SABR: Expected arrival 4");
         assert_eq!(path_sabr.hop_count, 2, "SABR: Expected 2 hops");
 
         Ok(())
@@ -381,7 +381,7 @@ mod tests {
 
         let path_hop = res_hop[2].as_ref().unwrap();
         assert_eq!(
-            path_hop.arrival_time.end, 11,
+            path_hop.recv.end, 11,
             "Hop: Expected arrival 11 via direct path"
         );
         assert_eq!(path_hop.hop_count, 1, "Hop: Expected 1 hop");
@@ -393,10 +393,7 @@ mod tests {
             .expect("SABR: Routing Failed!");
 
         let path_sabr = res_sabr[2].as_ref().unwrap();
-        assert_eq!(
-            path_sabr.arrival_time.end, 4,
-            "SABR: Expected arrival 4 via B"
-        );
+        assert_eq!(path_sabr.recv.end, 4, "SABR: Expected arrival 4 via B");
         assert_eq!(path_sabr.hop_count, 2, "SABR: Expected 2 hops");
 
         Ok(())
@@ -434,7 +431,7 @@ mod tests {
 
         let dest_id: usize = ref_3.into();
         let path_hop = res_hop[dest_id].as_ref().unwrap();
-        assert_eq!(path_hop.arrival_time.end, 30, "Hop: Expected arrival 30");
+        assert_eq!(path_hop.recv.end, 30, "Hop: Expected arrival 30");
         assert_eq!(path_hop.hop_count, 2, "Hop: Expected 2 hops");
 
         let mut algo_sabr = HybridParenting::<SABR, NoManagement, EVLManager>::new();
@@ -444,7 +441,7 @@ mod tests {
             .expect("SABR: Routing Failed!");
 
         let path_sabr = res_sabr[dest_id].as_ref().unwrap();
-        assert_eq!(path_sabr.arrival_time.end, 30, "SABR: Expected arrival 30");
+        assert_eq!(path_sabr.recv.end, 30, "SABR: Expected arrival 30");
         assert_eq!(path_sabr.hop_count, 2, "SABR: Expected 2 hops");
 
         Ok(())
@@ -484,7 +481,7 @@ mod tests {
 
         let dest_id: usize = ref_4.into();
         let path_hop = res_hop[dest_id].as_ref().unwrap();
-        assert_eq!(path_hop.arrival_time.end, 50, "Hop: Expected arrival 50");
+        assert_eq!(path_hop.recv.end, 50, "Hop: Expected arrival 50");
         assert_eq!(path_hop.hop_count, 3, "Hop: Expected 3 hops");
 
         let mut algo_sabr = HybridParenting::<SABR, NoManagement, EVLManager>::new();
@@ -494,7 +491,7 @@ mod tests {
             .expect("SABR: Routing Failed!");
 
         let path_sabr = res_sabr[dest_id].as_ref().unwrap();
-        assert_eq!(path_sabr.arrival_time.end, 50, "SABR: Expected arrival 50");
+        assert_eq!(path_sabr.recv.end, 50, "SABR: Expected arrival 50");
         assert_eq!(path_sabr.hop_count, 3, "SABR: Expected 3 hops");
 
         Ok(())
@@ -532,17 +529,14 @@ mod tests {
         assert!(res[e_idx].is_some(), "Real node E(4) should be reachable");
         let path_to_e = res[e_idx].as_ref().unwrap();
         assert_eq!(
-            path_to_e.arrival_time.end, 4,
+            path_to_e.recv.end, 4,
             "Should pick the faster path through E (arrival 4)"
         );
 
         let c_idx: usize = 2;
         assert!(res[c_idx].is_some(), "Real node C(2) should be reachable");
         let path_to_c = res[c_idx].as_ref().unwrap();
-        assert_eq!(
-            path_to_c.arrival_time.end, 6,
-            "Path to C is slower (arrival 6)"
-        );
+        assert_eq!(path_to_c.recv.end, 6, "Path to C is slower (arrival 6)");
 
         Ok(())
     }
@@ -586,7 +580,7 @@ mod tests {
         );
         let path_to_e = res[e_idx].as_ref().unwrap();
         assert_eq!(
-            path_to_e.arrival_time.end, 4,
+            path_to_e.recv.end, 4,
             "Should pick the faster path through E even on targeted search"
         );
 

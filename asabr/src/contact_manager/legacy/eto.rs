@@ -87,7 +87,7 @@ mod tests {
         manager.manual_enqueue(&bp0(2000));
         let data = manager.dry_run_tx(ti, 3, &bp0(100)).unwrap();
         assert_eq!(
-            data.tx_window.start, 5,
+            data.send.start, 5,
             "TEST FAILED: tx_start should be at_time + queue/rate for ETO."
         );
     }

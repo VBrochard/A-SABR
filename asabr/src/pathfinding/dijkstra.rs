@@ -50,7 +50,7 @@ pub fn dijkstra<
     CM: ContactManager,
     W: DijkstraWorkspace<'id, NM, CM>,
     D: Distance<NM, CM>,
-    De: Destination<'id>,
+    De: Destination<'id, NM, CM>,
 >(
     multigraph: &mut Multigraph<'id, NM, CM>,
     current_time: Date,
@@ -158,7 +158,7 @@ pub struct Disktra<W, D> {
     _phantom: PhantomData<fn(W, D)>,
 }
 
-impl<'id, W, D, NM, CM, De: Destination<'id>> Pathfinding<'id, NM, CM, De> for Disktra<W, D>
+impl<'id, W, D, NM, CM, De: Destination<'id, NM, CM>> Pathfinding<'id, NM, CM, De> for Disktra<W, D>
 where
     W: DijkstraWorkspace<'id, NM, CM>,
     D: Distance<NM, CM>,

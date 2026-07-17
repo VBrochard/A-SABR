@@ -1,5 +1,9 @@
-use crate::contact_manager::ContactManager;
+use crate::bundle::Bundle;
+use crate::contact_manager::{ContactManager, ContactManagerTxData};
+use crate::errors::ASABRError;
 use crate::parse_transparent;
+#[cfg(feature = "first_depleted")]
+use crate::types::Volume;
 use crate::types::{Date, NodeID, TimeInterval};
 
 use core::cmp::Ordering;
@@ -126,6 +130,35 @@ impl<CM: ContactManager> Contact<CM> {
             .start
             .partial_cmp(&other.lifespan.start)
             .unwrap_or(Ordering::Equal)
+    }
+
+    /// Delegates the dry run method to the manager.
+    pub fn dry_run_tx(&self, at_time: Date, bundle: &Bundle) -> Option<ContactManagerTxData> {
+        self.manager.dry_run_tx(self.lifespan, at_time, bundle)
+    }
+    /// Delegates the schedule method to the boxed object.
+    pub fn schedule_tx(
+        &mut self,
+        tx_data: ContactManagerTxData,
+        bundle: &Bundle,
+    ) -> Result<(), ASABRError> {
+        self.manager.schedule_tx(self.lifespan, tx_data, bundle)
+    }
+
+    #[cfg(feature = "first_depleted")]
+    /// Delegates the get_original_volume method to the boxed object.
+    pub fn get_original_volume(&self) -> Volume {
+        self.manager.get_original_volume()
+    }
+    /// Delegates the manual_enqueue method to the boxed object.
+    #[cfg(feature = "manual_queueing")]
+    pub fn manual_enqueue(&mut self, bundle: &Bundle) -> bool {
+        self.manager.manual_enqueue(bundle)
+    }
+    /// Delegates the manual_dequeue method to the boxed object.
+    #[cfg(feature = "manual_queueing")]
+    pub fn manual_dequeue(&mut self, bundle: &Bundle) -> bool {
+        self.manager.manual_dequeue(bundle)
     }
 }
 

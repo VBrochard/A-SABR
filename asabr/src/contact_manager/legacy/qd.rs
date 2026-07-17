@@ -52,7 +52,7 @@ mod tests {
 
         let data = manager.dry_run_tx(ti, C_START, &bp0(100)).unwrap();
         assert_eq!(
-            data.tx_window.start, 2,
+            data.send.start, 2,
             "TEST FAILED: tx_start should be shifted by queue delay from contact start."
         );
     }
@@ -70,7 +70,7 @@ mod tests {
 
         let data = manager.dry_run_tx(ti, 5, &bp0(100)).unwrap();
         assert_eq!(
-            data.tx_window.start, 5,
+            data.send.start, 5,
             "TEST FAILED: tx_start should be at_time when it arrives after the queue shift."
         );
     }

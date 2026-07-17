@@ -13,7 +13,7 @@ pub struct ViaHop<'id> {
     /// A reference to the parent route stage for this hop.
     pub parent_frag: usize,
     /// Transmission interval used by this hop.
-    pub tx_time: TimeInterval,
+    pub send: TimeInterval,
 }
 
 /// Represents the end of a path to a node.
@@ -29,12 +29,10 @@ pub struct PathFragment<'id> {
     pub hop_count: HopCount,
 
     /// The arrival time to the final node in the original disktra
-    pub arrival_time: TimeInterval,
+    pub recv: TimeInterval,
     /// A reference to the receiving node for this hop.
     pub rx_node: RealNodeRef<'id>,
-    // /// The cumulative transmission delay incurred on this path, often used for routing optimizations.
-    // pub cumulative_delay: Duration,
-    /// The time after wich any path trough this pathfragment is invalid.
+    /// An approximation of this route expiration (min of contacts lifetime end).
     pub expiration: Date,
 }
 
@@ -52,14 +50,14 @@ impl<'id> PathFragment<'id> {
     ///
     /// A new instance of `PathFragment`.
     pub fn new(
-        arrival_time: TimeInterval,
+        recv: TimeInterval,
         via_hop: Option<ViaHop<'id>>,
         hop_count: HopCount,
         rx_node: RealNodeRef<'id>,
         expiration: Date,
     ) -> Self {
         Self {
-            arrival_time,
+            recv,
             via: via_hop,
             hop_count,
             rx_node,
@@ -72,7 +70,7 @@ impl<'id> PathFragment<'id> {
         Self {
             via: None,
             hop_count: 0,
-            arrival_time: TimeInterval {
+            recv: TimeInterval {
                 start: time,
                 end: time,
             },
@@ -87,7 +85,7 @@ impl<'id> Display for PathFragment<'id> {
         writeln!(
             f,
             "Route arriving during t={} with {} hop(s), passing by {:#?}",
-            self.arrival_time, self.hop_count, self.via
+            self.recv, self.hop_count, self.via
         )
     }
 }

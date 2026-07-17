@@ -43,7 +43,7 @@ impl<NM: NodeManager, CM: ContactManager> Distance<NM, CM> for SABR {
         _bundle: &Bundle,
     ) -> Ordering {
         super::cmp_by(first, second, |path| {
-            (path.arrival_time.end, path.hop_count, path.expiration)
+            (path.recv.end, path.hop_count, path.expiration)
         })
         // TODO: Readd expiration
     }
@@ -60,7 +60,7 @@ impl<NM: NodeManager, CM: ContactManager> HybridParentingOrd<NM, CM> for SABR {
         matches!(
             (
                 first.hop_count.cmp(&second.hop_count),
-                first.arrival_time.end.cmp(&second.arrival_time.end)
+                first.recv.end.cmp(&second.recv.end)
             ),
             (Ordering::Less, Ordering::Greater) | (Ordering::Greater, Ordering::Less)
         )

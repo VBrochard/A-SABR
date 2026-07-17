@@ -50,7 +50,7 @@ mod tests {
         let after = manager.dry_run_tx(ti, C_START, &bp0(1000)).unwrap();
 
         assert_eq!(
-            before.tx_window.start, after.tx_window.start,
+            before.send.start, after.send.start,
             "TEST FAILED: EVL tx_start should not be affected by queue occupancy."
         );
     }

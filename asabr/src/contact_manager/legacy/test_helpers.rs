@@ -95,13 +95,13 @@ macro_rules! generate_common_tests {
                 .dry_run_tx($crate::types::TimeInterval{start:C_START, end:C_END}, C_START, &bp0(100))
                 .unwrap();
             assert_eq!(
-                data.rx_window.start,
-                data.tx_window.start + DELAY,
+                data.recv.start,
+                data.send.start + DELAY,
                 "TEST FAILED: rx_start should equal tx_start + DELAY."
             );
              assert_eq!(
-                data.rx_window.end,
-                data.tx_window.end + DELAY,
+                data.recv.end,
+                data.send.end + DELAY,
                 "TEST FAILED: rx_end should equal tx_end + DELAY."
             );
         }
